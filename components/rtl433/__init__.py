@@ -2,6 +2,7 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
 from esphome.const import CONF_ID, CONF_FREQUENCY
+from esphome.core import CORE
 
 CODEOWNERS = []
 AUTO_LOAD = ["json"]
@@ -78,6 +79,12 @@ CONFIG_SCHEMA = cv.Schema(
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+
+    # ESPHome 2026.2+ selectively compiles Arduino libraries. RadioLib's
+    # Arduino HAL includes SPI.h, so explicitly enable the bundled SPI library
+    # when building with the Arduino framework.
+    if CORE.is_esp32 and CORE.using_arduino:
+        cg.add_library("SPI", None)
 
     # Inject library dependencies so users don't need to add them manually.
     cg.add_library(
