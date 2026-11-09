@@ -64,4 +64,4 @@ rtl433:
 
   on_message:
     - lambda: |-
-        ESP_LOGI("rtl433", "RF message: %s", x.c_str())
+        ESP_LOGI("rtl433", "RF message: %s", x.c_str());
