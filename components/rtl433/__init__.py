@@ -100,7 +100,7 @@ async def to_code(config):
         "https://github.com/NorthernMan54/rtl_433_ESP.git#f0a81569b58a60ea8b3a5efd8e9b39670e8d8df8",
     )
     # Pin the version whose CC1101 tuning API uses kbps/kHz as documented.
-    cg.add_library("jgromes/RadioLib", "7.2.1")
+    cg.add_library("jgromes/RadioLib", "7.7.1")
     cg.add_platformio_option("lib_ldf_mode", "chain+")
 
     # Always activate the CC1101 path in rtl_433_ESP
