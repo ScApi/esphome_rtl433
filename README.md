@@ -109,6 +109,9 @@ rtl433:
 | `mosi_pin` | int (0--48) | No | VSPI default | SPI MOSI GPIO |
 | `frequency` | float (300--928) | No | 433.92 | Receive frequency in MHz |
 | `modulation` | string | No | `OOK` | RF modulation type: `OOK` or `FSK`. The CC1101 can only receive one type at a time. Most 433 MHz devices use OOK; TPMS and some industrial sensors use FSK. |
+| `bitrate` | float (0.025--600) | No | `17.24` | CC1101 FSK bit rate in kbps. Applied only when `modulation: FSK`. |
+| `deviation` | float (1.587--380.8) | No | `40` | CC1101 FSK frequency deviation in kHz. Applied only when `modulation: FSK`. |
+| `rx_bandwidth` | float (58--812) | No | `270` | CC1101 FSK receiver bandwidth in kHz. RadioLib selects the nearest supported setting. Applied only when `modulation: FSK`. |
 | `on_message` | automation | No | -- | Trigger that fires with each decoded message; the variable `x` is a `std::string` containing the raw JSON |
 
 #### RSSI & signal detection
@@ -346,6 +349,21 @@ rtl433:
   gdo0_pin: 13
   modulation: FSK
 ```
+
+## CC1101 FSK modem tuning
+
+The component exposes the CC1101 modem settings as YAML options. The values are applied after the receiver is initialised but before its capture interrupt is enabled; after changing the modem registers, asynchronous receive mode is restarted. These options are only used with `modulation: FSK`.
+
+```yaml
+rtl433:
+  frequency: 868.00
+  modulation: FSK
+  bitrate: 100          # kbps
+  deviation: 50         # kHz
+  rx_bandwidth: 325     # kHz
+```
+
+The component pins RadioLib to version `7.2.1`, whose CC1101 setters use kbps/kHz units. This avoids silently changing units when a newer RadioLib release changes the method signatures.
 
 ## Frequency Selection
 
