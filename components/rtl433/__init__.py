@@ -141,6 +141,7 @@ async def to_code(config):
         cg.add_build_flag("-DsetBitrate")
         cg.add_build_flag("-DsetFreqDev")
         cg.add_build_flag("-DsetRxBW")
+        cg.add_build_flag("-DFLOWIS_RTL433_FSK")
 
     # ---- RSSI & signal detection (compile-time build flags) ----
     cg.add_build_flag(f"-DMINRSSI={config[CONF_MIN_RSSI]}")
