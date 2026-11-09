@@ -22,6 +22,9 @@ CONF_MISO_PIN = "miso_pin"
 CONF_MOSI_PIN = "mosi_pin"
 CONF_ON_MESSAGE = "on_message"
 CONF_MODULATION = "modulation"
+CONF_BITRATE = "bitrate"
+CONF_DEVIATION = "deviation"
+CONF_RX_BANDWIDTH = "rx_bandwidth"
 
 # --- New config keys (rtl_433_ESP tuning options) ---
 CONF_MIN_RSSI = "min_rssi"
@@ -49,6 +52,10 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_MOSI_PIN): cv.int_range(min=0, max=48),
         cv.Optional(CONF_FREQUENCY, default=433.92): cv.float_range(min=300.0, max=928.0),
         cv.Optional(CONF_MODULATION, default="OOK"): cv.one_of("OOK", "FSK", upper=True),
+        # CC1101 FSK modem settings (RadioLib 7.2.1 units: kbps / kHz).
+        cv.Optional(CONF_BITRATE, default=17.24): cv.float_range(min=0.025, max=600.0),
+        cv.Optional(CONF_DEVIATION, default=40.0): cv.float_range(min=1.587, max=380.8),
+        cv.Optional(CONF_RX_BANDWIDTH, default=270.0): cv.float_range(min=58.0, max=812.0),
         cv.Optional(CONF_ON_MESSAGE): automation.validate_automation(
             {
                 cv.GenerateID(CONF_ID): cv.declare_id(Rtl433MessageTrigger),
@@ -92,7 +99,8 @@ async def to_code(config):
         None,
         "https://github.com/NorthernMan54/rtl_433_ESP.git",
     )
-    cg.add_library("RadioLib", "^7.2.1")
+    # Pin the version whose CC1101 tuning API uses kbps/kHz as documented.
+    cg.add_library("RadioLib", "7.2.1")
     cg.add_platformio_option("lib_ldf_mode", "chain+")
 
     # Always activate the CC1101 path in rtl_433_ESP
@@ -126,6 +134,14 @@ async def to_code(config):
     ook = "true" if config[CONF_MODULATION] == "OOK" else "false"
     cg.add_build_flag(f"-DOOK_MODULATION={ook}")
 
+    # rtl_433_ESP exposes these CC1101 tuning wrappers behind test flags.
+    # Enable them only for FSK, then set the requested values before the
+    # receiver interrupt is enabled by the component.
+    if config[CONF_MODULATION] == "FSK":
+        cg.add_build_flag("-DsetBitrate")
+        cg.add_build_flag("-DsetFreqDev")
+        cg.add_build_flag("-DsetRxBW")
+
     # ---- RSSI & signal detection (compile-time build flags) ----
     cg.add_build_flag(f"-DMINRSSI={config[CONF_MIN_RSSI]}")
     cg.add_build_flag(f"-DRSSI_THRESHOLD={config[CONF_RSSI_THRESHOLD_DELTA]}")
@@ -138,6 +154,10 @@ async def to_code(config):
     # Runtime setter for rssi_threshold_delta — ensures the value is applied
     # even if the library re-initialises the static after the build flag is read.
     cg.add(var.set_rssi_threshold_delta(config[CONF_RSSI_THRESHOLD_DELTA]))
+    if config[CONF_MODULATION] == "FSK":
+        cg.add(var.set_fsk_bitrate(config[CONF_BITRATE]))
+        cg.add(var.set_fsk_deviation(config[CONF_DEVIATION]))
+        cg.add(var.set_fsk_rx_bandwidth(config[CONF_RX_BANDWIDTH]))
 
     # ---- Unparsed signals (compile-time #ifdef) ----
     if config[CONF_PUBLISH_UNPARSED]:
