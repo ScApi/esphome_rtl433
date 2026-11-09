@@ -45,7 +45,7 @@ class Rtl433Component : public Component {
     // Apply runtime-settable RSSI settings after receiver initialisation.
     rf_.setRSSIThreshold(rssi_threshold_delta_);
 
-#if !OOK_MODULATION
+#ifdef FLOWIS_RTL433_FSK
     // initReceiver() has started the modem but has not attached the capture
     // interrupt yet. Configure the CC1101 while capture is still disabled.
     if (!rtl_433_ESP::spiTake(1000)) {
