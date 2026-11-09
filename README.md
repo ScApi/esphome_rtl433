@@ -363,7 +363,7 @@ rtl433:
   rx_bandwidth: 325     # kHz
 ```
 
-The component pins RadioLib to version `7.2.1`, whose CC1101 setters use kbps/kHz units. This avoids silently changing units when a newer RadioLib release changes the method signatures.
+The component pins RadioLib to version `7.7.1`, which satisfies the `RadioLib (>=7.7.1)` dependency declared by rtl_433_ESP 0.6.3. In this version the CC1101 setters use kbps/kHz units, matching the YAML values above.
 
 ## Frequency Selection
 
