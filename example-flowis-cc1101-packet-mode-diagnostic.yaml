@@ -11,6 +11,7 @@ external_components:
       ref: experiment/flowis-cc1101-packet-diagnostics
       path: ha-external-components
     components: [cc1101]
+    refresh: 0s  # Force GitHub check on every validation during diagnostics
 
 # Flowis+ ECO hardware-packet-mode test
 # ESPHome 2026.10.2+; loads a diagnostic override of the native cc1101 component.
