@@ -64,9 +64,13 @@ The expected packet payload sizes (25 and 19 bytes) come from the newer-module r
 
 ## If no packet appears
 
-No `flowis_pkt` line means that the native component did not deliver a complete packet that passed the configured sync and CRC checks. It does not by itself distinguish between no transmission, frequency/sync mismatch, packet truncation, and CRC failure.
+No `flowis_pkt` line means that the native component did not deliver a complete packet to the callback. With `crc_enable: true`, this can mean either no sync/packet was obtained or the CC1101 rejected the received CRC. It does not by itself distinguish no transmission, frequency/sync mismatch, packet truncation, and CRC failure.
 
-The next controlled diagnostic step would be to repeat the test with `crc_enable: false` while keeping every other radio setting unchanged. That checks whether packets are reaching sync/packet handling when hardware CRC filtering is removed. Do not change bitrate, deviation, bandwidth, frequency, and sync settings all at once.
+The next controlled diagnostic pass is provided as [`example-flowis-cc1101-packet-mode-no-crc.yaml`](../example-flowis-cc1101-packet-mode-no-crc.yaml). It changes only `crc_enable` to `false` and marks every callback `CRC=NOT_CHECKED`. This lets sync-matched packets reach the callback even when their CRC would fail. Do not treat those packets as valid meter data until their CRC is checked independently. Do not change bitrate, deviation, bandwidth, frequency, and sync settings all at once.
+
+### Interpreting the FIFO warning
+
+ESPHome 2026.10.2 currently prints `RX FIFO overflow, flushing` for two different conditions: the actual RX FIFO overflow status bit is set **or** the reported RX byte count is zero. The log line does not distinguish these cases. The warning alone is therefore not proof that a packet exceeded the 64-byte FIFO. If it repeats without callbacks, the next code-level diagnostic should log both `RXBYTES.NUM_RXBYTES` and `RXBYTES.RXFIFO_OVERFLOW` separately.
 
 ## Important implementation notes
 
