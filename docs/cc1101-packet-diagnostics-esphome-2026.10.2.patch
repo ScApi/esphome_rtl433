@@ -1,0 +1,152 @@
+# ESPHome 2026.10.2 native CC1101 packet-mode diagnostic patch
+
+This patch applies only to the ESPHome built-in component
+`esphome/components/cc1101/cc1101.cpp`. It does not alter this repository's
+`components/rtl433` external component and must not be combined with an
+`rtl433:` instance in the same firmware while the built-in `cc1101:`
+component owns the transceiver.
+
+## Apply
+
+1. Locate ESPHome 2026.10.2's
+   `esphome/components/cc1101/cc1101.cpp`.
+2. Save a backup.
+3. Apply the patch below to the function `CC1101Component::loop()`.
+4. Compile with the existing `example-flowis-cc1101-packet-mode.yaml`,
+   retaining `crc_enable: true`.
+
+The patch:
+- separates true RX FIFO overflow from an empty FIFO wake-up;
+- logs the raw RXBYTES register value and GPIO4/GDO0 level;
+- logs the raw variable packet length and byte count before discarding;
+- logs CRC rejection separately, including RSSI, FREQEST and LQI;
+- logs accepted packet metadata without changing radio settings or callback data.
+
+It intentionally does not try to read a complete packet after a length/FIFO
+state already judged invalid, and does not change sync, modem, CRC, whitening
+or Manchester settings.
+
+## Replacement function
+
+Replace the existing `CC1101Component::loop()` implementation with:
+
+```cpp
+void CC1101Component::loop() {
+  this->disable_loop();
+
+  if (this->state_.PKT_FORMAT != static_cast<uint8_t>(PacketFormat::PACKET_FORMAT_FIFO) ||
+      this->gdo0_pin_ == nullptr) {
+    return;
+  }
+
+  const bool gdo0_high = this->gdo0_pin_->digital_read();
+  if (!gdo0_high) {
+    return;
+  }
+
+  // RXBYTES contains NUM_RXBYTES in bits 0..6 and RXFIFO_OVERFLOW in bit 7.
+  this->read_(Register::RXBYTES);
+  const uint8_t rxbytes_raw = this->state_.RXBYTES;
+  const uint8_t rx_bytes = this->state_.NUM_RXBYTES;
+  const bool overflow = this->state_.RXFIFO_OVERFLOW;
+
+  if (overflow) {
+    ESP_LOGW(TAG,
+             "FLOWIS_DIAG FIFO_OVERFLOW raw=0x%02X count=%u GDO0=%u MARCSTATE=%u",
+             rxbytes_raw, rx_bytes, static_cast<unsigned>(gdo0_high),
+             static_cast<unsigned>(this->state_.MARC_STATE));
+    this->enter_idle_();
+    this->strobe_(Command::FRX);
+    this->enter_rx_();
+    return;
+  }
+
+  if (rx_bytes == 0) {
+    ESP_LOGW(TAG,
+             "FLOWIS_DIAG FIFO_EMPTY raw=0x%02X GDO0=%u MARCSTATE=%u",
+             rxbytes_raw, static_cast<unsigned>(gdo0_high),
+             static_cast<unsigned>(this->state_.MARC_STATE));
+    this->enter_idle_();
+    this->strobe_(Command::FRX);
+    this->enter_rx_();
+    return;
+  }
+
+  uint8_t payload_length = 0;
+  uint8_t expected_rx = 0;
+
+  if (this->state_.LENGTH_CONFIG == static_cast<uint8_t>(LengthConfig::LENGTH_CONFIG_VARIABLE)) {
+    this->read_(Register::FIFO, &payload_length, 1);
+    expected_rx = static_cast<uint8_t>(payload_length + 1);
+  } else {
+    payload_length = this->state_.PKTLEN;
+    expected_rx = payload_length;
+  }
+
+  if (payload_length == 0 || payload_length > 64 || rx_bytes != expected_rx) {
+    ESP_LOGW(TAG,
+             "FLOWIS_DIAG INVALID_PACKET rxbytes_raw=0x%02X rx_bytes=%u "
+             "length=0x%02X (%u) expected_rx=%u GDO0=%u MARCSTATE=%u",
+             rxbytes_raw, rx_bytes, payload_length, payload_length, expected_rx,
+             static_cast<unsigned>(gdo0_high),
+             static_cast<unsigned>(this->state_.MARC_STATE));
+    this->enter_idle_();
+    this->strobe_(Command::FRX);
+    this->enter_rx_();
+    return;
+  }
+
+  this->packet_.resize(payload_length);
+  this->read_(Register::FIFO, this->packet_.data(), payload_length);
+
+  // Capture packet status registers after the FIFO has been read.
+  this->read_(Register::FREQEST);
+  this->read_(Register::RSSI);
+  this->read_(Register::LQI);
+
+  const float freq_offset =
+      static_cast<int8_t>(this->state_.FREQEST) * (XTAL_FREQUENCY / (1 << 14));
+  const float rssi = (this->state_.RSSI * RSSI_STEP) - RSSI_OFFSET;
+  const bool crc_ok = (this->state_.LQI & STATUS_CRC_OK_MASK) != 0;
+  const uint8_t lqi = this->state_.LQI & STATUS_LQI_MASK;
+
+  if (this->state_.CRC_EN != 0 && !crc_ok) {
+    ESP_LOGW(TAG,
+             "FLOWIS_DIAG CRC_REJECT len=%u RSSI=%.1f dBm FREQEST=%+.0f Hz LQI=%u",
+             static_cast<unsigned>(this->packet_.size()), rssi, freq_offset,
+             static_cast<unsigned>(lqi));
+  } else {
+    ESP_LOGD(TAG,
+             "FLOWIS_DIAG PACKET_ACCEPT len=%u CRC=%s RSSI=%.1f dBm "
+             "FREQEST=%+.0f Hz LQI=%u",
+             static_cast<unsigned>(this->packet_.size()),
+             this->state_.CRC_EN == 0 ? "DISABLED" : "OK",
+             rssi, freq_offset, static_cast<unsigned>(lqi));
+    this->call_listeners_(this->packet_, freq_offset, rssi, lqi);
+  }
+
+  // Return to RX exactly as the original ESPHome implementation does.
+  this->enter_idle_();
+  this->strobe_(Command::FRX);
+  this->enter_rx_();
+}
+```
+
+## Important caveat
+
+ESPHome's GDO0 packet-mode configuration is set to assert at FIFO threshold
+or end-of-packet. This diagnostic patch makes the current driver's decision
+visible; it does not yet redesign packet acquisition. If the output shows
+`INVALID_PACKET` with repeated `rx_bytes=65`, or a nonsensical length byte,
+the next change should be a separate, carefully tested receive-state-machine
+fix in ESPHome's native CC1101 component. Do not mistake `CRC_REJECT` for a
+confirmed bad over-the-air CRC if the packet was already truncated or
+misaligned before reading.
+
+## Expected useful outcomes
+
+- `FIFO_OVERFLOW`: hardware overflow status bit was set.
+- `FIFO_EMPTY`: GDO0 was high but RXBYTES reported zero; not a confirmed overflow.
+- `INVALID_PACKET`: the driver's current variable-length/byte-count validation rejected the frame.
+- `CRC_REJECT`: a structurally accepted packet was read, but CC1101 reported CRC failure.
+- `PACKET_ACCEPT`: CC1101 delivered a packet and, with CRC enabled, the hardware CRC status passed.
