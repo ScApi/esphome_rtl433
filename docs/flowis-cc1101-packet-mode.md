@@ -75,20 +75,22 @@ The existing `on_packet` lambda continues to log each accepted packet:
 - `CRC=OK`: the callback passed the component's hardware CRC acceptance rule.
 - `RSSI`, `FREQEST`, `LQI`, and `DATA`: radio status and raw payload bytes.
 
-The driver now also emits these diagnostic messages. Its GDO0/RX FIFO threshold
-is set to 32 bytes (TI `FIFOTHR=7`). At 100 kbaud, the 32-byte threshold
-leaves about 2.56 ms before a 64-byte FIFO fills. The known reference Flowis
-frames (18/19 bytes) and the newer Type-1/Type-2 examples discussed so far fit
-below this threshold, so they should reach end-of-packet before the threshold
-event. An `INVALID_PACKET` line now includes
-`PKTSTATUS.SFD`, RSSI and up to 48 FIFO bytes captured before the receiver is
-flushed. `SFD=1` means the radio still considers the packet active; `SFD=0`
-means the sync/end-of-packet signal is no longer active. This is important
-because GDO0 mode `0x01` asserts both at the FIFO threshold and at packet end.
-The current diagnostic loop still flushes after logging; the raw preview is
-intended to identify the data and determine the correct receive-state-machine
-fix. The 32-byte threshold and preview code have not yet been compiled or tested
-on the hardware.
+The driver now configures GDO0 as `0x06` (sync word received / end of packet)
+and attaches an interrupt on the **falling edge**. This means the receive loop
+is entered after the CC1101 reports packet end, rather than when GDO0 first
+asserts at the FIFO threshold. The FIFO threshold remains at 32 bytes, but it
+is no longer the GDO0 interrupt source. If a packet is longer than the 64-byte
+FIFO, the CC1101 de-asserts this signal on overflow; the loop then reports the
+overflow status separately.
+
+The `INVALID_PACKET` diagnostic includes `PKTSTATUS.SFD`, RSSI and up to
+48 FIFO bytes captured before the receiver is flushed. `SFD=1` means the
+radio still considers the packet active; `SFD=0` means the sync/end-of-packet
+signal is no longer active. In the previous logs, `SFD=1` together with
+`MARCSTATE=0x0D` demonstrated that the code was reading an in-progress frame
+at the FIFO threshold. The new end-of-packet interrupt is intended to avoid
+that premature read. This source change has not yet been compiled or tested on
+the target hardware.
 
 | Log tag | Meaning |
 |---|---|
@@ -109,6 +111,6 @@ The controlled no-CRC variant for this same external-component diagnostic build 
 ## Important implementation notes
 
 - This is a receiver diagnostic, not a production decoder.
-- The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to `CC1101Component::loop()` and the packet-mode FIFO threshold.
+- The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to packet-mode GDO0 configuration, interrupt edge selection and `CC1101Component::loop()`.
 - The code has been placed in the GitHub branch, but the latest 56-byte threshold adjustment has **not yet been compiled in your Home Assistant ESPHome environment or tested on the ESP32/CC1101 hardware**.
 - The current external `rtl433:` component cannot run at the same time as this native `cc1101:` instance on the same physical module.
