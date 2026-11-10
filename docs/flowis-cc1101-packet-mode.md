@@ -48,7 +48,7 @@ GDO2 is not used by this native ESPHome packet-mode test.
 Each accepted packet is logged as one line:
 
 ```text
-[flowis_pkt] RX type=type-1 len=25 CRC=OK RSSI=-63.0 dBm FREQEST=+44000 Hz LQI=... DATA=[...]
+[flowis_pkt] RX type=type-1 len=25 CRC=OK RSSI=-63.0 dBm FREQEST=+4000 Hz LQI=... DATA=[...]
 ```
 
 - `type-1`: first data byte is `0x01`; the newer reports show 25 data bytes.
@@ -56,7 +56,7 @@ Each accepted packet is logged as one line:
 - `len`: number of bytes delivered by ESPHome's `on_packet` callback. The variable-length prefix is consumed by the native driver before the callback.
 - `CRC=OK`: the callback is only invoked for a packet that passes the CC1101 hardware CRC check because `crc_enable: true`.
 - `RSSI`: received signal strength in dBm.
-- `FREQEST`: signed CC1101 frequency-estimate value in Hz, as exposed by ESPHome 2026.10.2.
+- `FREQEST`: signed CC1101 frequency-estimate value in Hz, as exposed by ESPHome 2026.10.2. The issue report measured about +44 kHz when tuned to 868.000 MHz; this test tunes to 868.040 MHz, so a similar module may show a residual offset around +4 kHz, not +44 kHz.
 - `LQI`: link-quality indicator from the CC1101 status register.
 - `DATA`: payload bytes in hexadecimal.
 
