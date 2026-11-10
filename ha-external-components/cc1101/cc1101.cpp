@@ -222,12 +222,41 @@ void CC1101Component::loop() {
   }
 
   if (payload_length == 0 || payload_length > 64 || rx_bytes != expected_rx) {
+    // Preserve a short FIFO preview before flushing. PKTSTATUS.SFD tells us
+    // whether the CC1101 still sees an active packet or has reached packet end.
+    this->read_(Register::PKTSTATUS);
+    const uint8_t pktstatus_raw = this->state_.PKTSTATUS;
+    const bool sfd_active = this->state_.SFD != 0;
+    this->read_(Register::RSSI);
+    const float rssi = (this->state_.RSSI * RSSI_STEP) - RSSI_OFFSET;
     this->read_(Register::MARCSTATE);
+
+    uint8_t preview_len = rx_bytes > 1 ? static_cast<uint8_t>(rx_bytes - 1) : 0;
+    if (preview_len > 48) {
+      preview_len = 48;
+    }
+    uint8_t preview[48] = {};
+    if (preview_len > 0) {
+      this->read_(Register::FIFO, preview, preview_len);
+    }
+
+    static constexpr char HEX[] = "0123456789ABCDEF";
+    char preview_hex[48 * 3 + 1] = {};
+    size_t pos = 0;
+    for (uint8_t i = 0; i < preview_len; i++) {
+      if (i > 0) {
+        preview_hex[pos++] = ' ';
+      }
+      preview_hex[pos++] = HEX[(preview[i] >> 4) & 0x0F];
+      preview_hex[pos++] = HEX[preview[i] & 0x0F];
+    }
+
     ESP_LOGW(TAG,
-             "FLOWIS_DIAG INVALID_PACKET rxbytes_raw=0x%02X count=%u length=0x%02X (%u) expected=%u "
-             "gdo0=%u marcstate=0x%02X",
-             rx_bytes_raw, rx_bytes, payload_length, payload_length, expected_rx, this->gdo0_pin_->digital_read(),
-             this->state_.MARC_STATE);
+             "FLOWIS_DIAG INVALID_PACKET rxbytes_raw=0x%02X count=%u length=0x%02X (%u) "
+             "expected=%u sfd=%u pktstatus=0x%02X rssi=%.1f gdo0=%u marcstate=0x%02X data=[%s]",
+             rx_bytes_raw, rx_bytes, payload_length, payload_length, expected_rx,
+             sfd_active, pktstatus_raw, rssi, this->gdo0_pin_->digital_read(),
+             this->state_.MARC_STATE, preview_hex);
     this->enter_idle_();
     this->strobe_(Command::FRX);
     this->enter_rx_();
