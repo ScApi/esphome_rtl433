@@ -76,12 +76,14 @@ The existing `on_packet` lambda continues to log each accepted packet:
 - `RSSI`, `FREQEST`, `LQI`, and `DATA`: radio status and raw payload bytes.
 
 The driver now also emits these diagnostic messages. Its GDO0/RX FIFO threshold
-is set to 56 bytes (TI `FIFOTHR=13`) rather than 64. This leaves eight bytes of
-headroom to inspect an oversized variable-length frame before the FIFO fills.
-The known Flowis payload candidate of 51 bytes plus the one-byte length prefix
-fits below this threshold. If the reported frame is malformed with a length
-byte such as `0xD8`, the expected result is an `INVALID_PACKET` line before a
-hardware overflow; scheduling latency may still allow an overflow to occur.
+is set to 56 bytes (TI `FIFOTHR=13`). An `INVALID_PACKET` line now includes
+`PKTSTATUS.SFD`, RSSI and up to 48 FIFO bytes captured before the receiver is
+flushed. `SFD=1` means the radio still considers the packet active; `SFD=0`
+means the sync/end-of-packet signal is no longer active. This is important
+because GDO0 mode `0x01` asserts both at the FIFO threshold and at packet end.
+The current diagnostic loop still flushes after logging; the raw preview is
+intended to identify the data and determine the correct receive-state-machine
+fix. The new preview code has not yet been compiled or tested on the hardware.
 
 | Log tag | Meaning |
 |---|---|
@@ -102,6 +104,6 @@ The controlled no-CRC variant for this same external-component diagnostic build 
 ## Important implementation notes
 
 - This is a receiver diagnostic, not a production decoder.
-- The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to `CC1101Component::loop()`.
+- The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to `CC1101Component::loop()` and the packet-mode FIFO threshold.
 - The code has been placed in the GitHub branch, but the latest 56-byte threshold adjustment has **not yet been compiled in your Home Assistant ESPHome environment or tested on the ESP32/CC1101 hardware**.
 - The current external `rtl433:` component cannot run at the same time as this native `cc1101:` instance on the same physical module.
