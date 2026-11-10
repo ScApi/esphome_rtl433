@@ -91,7 +91,7 @@ The diagnostic messages include raw RXBYTES and, where relevant, the MARCSTATE. 
 
 No `flowis_pkt` line means no packet reached the existing callback. The diagnostic tags above should now indicate whether the driver saw an empty FIFO, a hardware overflow, an invalid length/count, or a CRC rejection.
 
-The controlled no-CRC variant is [`example-flowis-cc1101-packet-mode-no-crc.yaml`](../example-flowis-cc1101-packet-mode-no-crc.yaml). It changes only `crc_enable` to `false` and marks callback packets as `CRC=NOT_CHECKED`. Use it only as a separate experiment after collecting the CRC-enabled logs. Do not treat those packets as valid meter data until their CRC is checked independently. Do not change bitrate, deviation, bandwidth, frequency, and sync settings all at once.
+The controlled no-CRC variant for this same external-component diagnostic build is [`example-flowis-cc1101-packet-mode-diagnostic-no-crc.yaml`](../example-flowis-cc1101-packet-mode-diagnostic-no-crc.yaml). It changes only `crc_enable` to `false`, retains the diagnostic component override, and labels callback packets as `CRC=NOT_CHECKED`. Use it only as a separate experiment after collecting the CRC-enabled logs. Do not treat those packets as valid meter data until their CRC is independently checked. Do not change bitrate, deviation, bandwidth, frequency, and sync settings all at once.
 
 ## Important implementation notes
 
