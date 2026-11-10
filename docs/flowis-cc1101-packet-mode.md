@@ -52,6 +52,7 @@ external_components:
       ref: experiment/flowis-cc1101-packet-diagnostics
       path: ha-external-components
     components: [cc1101]
+    refresh: 0s  # Force GitHub check on every validation during diagnostics
 ```
 
 Place it at the top level of the YAML. If your file already contains `external_components:`, append this source to its list; do not create a second key.
