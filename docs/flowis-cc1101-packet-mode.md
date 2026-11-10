@@ -72,5 +72,5 @@ The next controlled diagnostic step would be to repeat the test with `crc_enable
 
 - This is a receiver test, not a production decoder.
 - The current `flowis-868-fsk` branch remains unchanged.
-- This branch adds only the isolated native packet-mode YAML and this guide.
+- This branch adds the isolated native packet-mode YAML, this guide, and a README link.
 - The current external `rtl433:` component cannot run at the same time as this native `cc1101:` instance on the same physical module.
