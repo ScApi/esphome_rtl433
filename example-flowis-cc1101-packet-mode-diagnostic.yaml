@@ -13,12 +13,13 @@ external_components:
     components: [cc1101]
 
 # Flowis+ ECO hardware-packet-mode test
-# ESPHome 2026.10.2+; uses ESPHome's built-in cc1101 component.
+# ESPHome 2026.10.2+; loads a diagnostic override of the native cc1101 component.
 #
 # IMPORTANT:
-# This test intentionally does NOT load the external rtl433 component.
-# Do not add "rtl433:" or external_components for esphome_rtl433 here:
-# both drivers would try to own the same CC1101 SPI device.
+# Do NOT add the separate "rtl433:" component or the repository's
+# components/rtl433 external component. The ha-external-components/cc1101
+# source above replaces ESPHome's bundled cc1101 component; it is not a
+# second radio driver, so only this one component owns the CC1101 SPI device.
 #
 # Existing wiring (ESP32-WROOM-32, VSPI):
 # CC1101 CSN  -> GPIO5
