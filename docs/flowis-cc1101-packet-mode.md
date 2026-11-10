@@ -2,7 +2,7 @@
 
 This is an isolated receiver test for the newer Flowis+ ECO radio modules, including the reported `v24.C.11` generation.
 
-It uses the **built-in ESPHome `cc1101` component** (available in ESPHome 2026.10.2) in hardware FIFO/packet mode. It does not use `rtl_433_ESP`, the external `rtl433:` component, or RadioLib's asynchronous pulse-capture path.
+It uses ESPHome's `cc1101:` component in hardware FIFO/packet mode. The diagnostic variant overrides the bundled ESPHome CC1101 component with the source in this repository, based on upstream **ESPHome 2026.10.2**. It does not use `rtl_433_ESP`, the separate `rtl433:` external component, or RadioLib's asynchronous pulse-capture path.
 
 ## Why this test exists
 
@@ -16,7 +16,7 @@ The Flowis+ report in [merbanan/rtl_433#2317](https://github.com/merbanan/rtl_43
 - sync word D391, sync mode 30/32
 - variable-length packets and hardware CRC
 
-The current external `rtl_433_ESP` path receives pulse events, but the user's recent log contains no Flowis preamble/frame/CRC diagnostics. This test separates radio packet reception from the rtl_433 decoder path.
+The native packet-mode test separates radio packet reception from the rtl_433 decoder path.
 
 ## Wiring
 
@@ -34,18 +34,35 @@ ESP32-WROOM-32 to CC1101:
 
 GDO2 is not used by this native ESPHome packet-mode test.
 
-## Install
+## Install from the Home Assistant ESPHome dashboard
 
-1. Use ESPHome 2026.10.2 or newer.
-2. Copy `example-flowis-cc1101-packet-mode.yaml` into ESPHome and provide the existing `wifi_ssid` and `wifi_password` secrets.
-3. Compile and flash it to the same ESP32.
-4. Open the ESPHome device logs and leave the receiver running near the meter.
+1. Use ESPHome **2026.10.2 or newer**.
+2. In the ESPHome device YAML editor, either use [the diagnostic example](../example-flowis-cc1101-packet-mode-diagnostic.yaml) as the starting point or copy its `external_components:` block into your existing Flowis YAML.
+3. Keep your existing Wi-Fi secrets and the current radio settings. Do not change `crc_enable: true` for this diagnostic run.
+4. Save, validate, and compile from the ESPHome dashboard. Then install the compiled firmware to the ESP32.
+5. Open the device logs and leave the receiver running near the meter.
 
-**Do not add** the external `esphome_rtl433` `external_components:` block or an `rtl433:` section to this test. The built-in `cc1101:` component must be the only driver that initializes the radio.
+The required override block is:
+
+```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/ScApi/esphome_rtl433
+      ref: experiment/flowis-cc1101-packet-diagnostics
+      path: ha-external-components
+    components: [cc1101]
+```
+
+Place it at the top level of the YAML. If your file already contains `external_components:`, append this source to its list; do not create a second key.
+
+This repository folder deliberately contains a same-named `cc1101` component, which ESPHome loads as an override of its bundled component. You do **not** need to access the add-on container, use a Windows shell, edit ESPHome's installed Python package, or copy files manually.
+
+**Do not add** the separate `rtl433:` component or the old `esphome_rtl433/components` source to this packet-mode test. The override remains the only component that initializes the CC1101 on SPI. It is an external override for `cc1101:`, not a second radio driver.
 
 ## What the log means
 
-Each accepted packet is logged as one line:
+The existing `on_packet` lambda continues to log each accepted packet:
 
 ```text
 [flowis_pkt] RX type=type-1 len=25 CRC=OK RSSI=-63.0 dBm FREQEST=+4000 Hz LQI=... DATA=[...]
@@ -53,28 +70,31 @@ Each accepted packet is logged as one line:
 
 - `type-1`: first data byte is `0x01`; the newer reports show 25 data bytes.
 - `type-2`: first data byte is `0x02`; the newer reports show 19 data bytes.
-- `len`: number of bytes delivered by ESPHome's `on_packet` callback. The variable-length prefix is consumed by the native driver before the callback.
-- `CRC=OK`: the callback is only invoked for a packet that passes the CC1101 hardware CRC check because `crc_enable: true`.
-- `RSSI`: received signal strength in dBm.
-- `FREQEST`: signed CC1101 frequency-estimate value in Hz, as exposed by ESPHome 2026.10.2. The issue report measured about +44 kHz when tuned to 868.000 MHz; this test tunes to 868.040 MHz, so a similar module may show a residual offset around +4 kHz, not +44 kHz.
-- `LQI`: link-quality indicator from the CC1101 status register.
-- `DATA`: payload bytes in hexadecimal.
+- `len`: bytes delivered by ESPHome's `on_packet` callback. The variable-length prefix is consumed by the driver.
+- `CRC=OK`: the callback passed the component's hardware CRC acceptance rule.
+- `RSSI`, `FREQEST`, `LQI`, and `DATA`: radio status and raw payload bytes.
 
-The expected packet payload sizes (25 and 19 bytes) come from the newer-module report in issue #2317. The test deliberately logs raw bytes only; it does not yet interpret meter ID, volume, monthly totals, timestamps, or alarms.
+The driver now also emits these diagnostic messages:
+
+| Log tag | Meaning |
+|---|---|
+| `FLOWIS_DIAG FIFO_OVERFLOW` | RXBYTES reports the CC1101 RX FIFO overflow status bit. |
+| `FLOWIS_DIAG FIFO_EMPTY` | GDO0 was high but RXBYTES reported zero bytes and no overflow bit. |
+| `FLOWIS_DIAG INVALID_PACKET` | The received variable-length prefix or FIFO byte count failed the driver's length validation. |
+| `FLOWIS_DIAG CRC_REJECT` | The driver read a structurally accepted packet, but the CC1101 CRC status bit was not set while CRC was enabled. |
+| `FLOWIS_DIAG PACKET_ACCEPT` | The packet passed the component's current CRC acceptance rule and is passed to the existing callback. |
+
+The diagnostic messages include raw RXBYTES and, where relevant, the MARCSTATE. The current code intentionally preserves ESPHome's original RX/IDLE/FIFO-flush state transitions. It separates the different reasons that the original generic warning conflated; it does not yet redesign packet acquisition.
 
 ## If no packet appears
 
-No `flowis_pkt` line means that the native component did not deliver a complete packet to the callback. With `crc_enable: true`, this can mean either no sync/packet was obtained or the CC1101 rejected the received CRC. It does not by itself distinguish no transmission, frequency/sync mismatch, packet truncation, and CRC failure.
+No `flowis_pkt` line means no packet reached the existing callback. The diagnostic tags above should now indicate whether the driver saw an empty FIFO, a hardware overflow, an invalid length/count, or a CRC rejection.
 
-The next controlled diagnostic pass is provided as [`example-flowis-cc1101-packet-mode-no-crc.yaml`](../example-flowis-cc1101-packet-mode-no-crc.yaml). It changes only `crc_enable` to `false` and marks every callback `CRC=NOT_CHECKED`. This lets sync-matched packets reach the callback even when their CRC would fail. Do not treat those packets as valid meter data until their CRC is checked independently. Do not change bitrate, deviation, bandwidth, frequency, and sync settings all at once.
-
-### Interpreting the FIFO warning
-
-ESPHome 2026.10.2 currently prints `RX FIFO overflow, flushing` for two different conditions: the actual RX FIFO overflow status bit is set **or** the reported RX byte count is zero. The log line does not distinguish these cases. The warning alone is therefore not proof that a packet exceeded the 64-byte FIFO. A diagnostic replacement for `CC1101Component::loop()` is provided in [`cc1101-packet-diagnostics-esphome-2026.10.2.patch`](cc1101-packet-diagnostics-esphome-2026.10.2.patch). It separates `FIFO_OVERFLOW`, `FIFO_EMPTY`, `INVALID_PACKET`, `CRC_REJECT`, and `PACKET_ACCEPT`, with raw RXBYTES and radio status information. The patch is a manual overlay against ESPHome 2026.10.2, not an ESPHome external component and not a change to this repository's `components/rtl433`.
+The controlled no-CRC variant is [`example-flowis-cc1101-packet-mode-no-crc.yaml`](../example-flowis-cc1101-packet-mode-no-crc.yaml). It changes only `crc_enable` to `false` and marks callback packets as `CRC=NOT_CHECKED`. Use it only as a separate experiment after collecting the CRC-enabled logs. Do not treat those packets as valid meter data until their CRC is checked independently. Do not change bitrate, deviation, bandwidth, frequency, and sync settings all at once.
 
 ## Important implementation notes
 
-- This is a receiver test, not a production decoder.
-- The current `flowis-868-fsk` branch remains unchanged.
-- This branch adds the isolated native packet-mode YAML, this guide, and a README link.
+- This is a receiver diagnostic, not a production decoder.
+- The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to `CC1101Component::loop()`.
+- The code has been placed in the GitHub branch, but it has **not yet been compiled in your Home Assistant ESPHome environment or tested on the ESP32/CC1101 hardware**.
 - The current external `rtl433:` component cannot run at the same time as this native `cc1101:` instance on the same physical module.
