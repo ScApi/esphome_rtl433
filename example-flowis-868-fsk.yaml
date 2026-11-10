@@ -48,12 +48,13 @@ rtl433:
 
   frequency: 868.00
   modulation: FSK
-  bitrate: 100
-  deviation: 50
-  rx_bandwidth: 325
+  bitrate: 17.24
+  deviation: 40
+  rx_bandwidth: 270
   min_pulse_length: 5  # microseconds; capture short Flowis+ FSK pulses
+  flowis_debug: true  # verbose logs from Flowis decoder only
 
-  # Start with the same receive/debug approach as the Flowis tests.
+  # Diagnostic profile: default FSK modem values plus Flowis-only decoder logging.
   min_rssi: -82
   rssi_threshold_delta: 9
   rssi_samples: 50000
@@ -61,7 +62,7 @@ rtl433:
   publish_unparsed: true
   deaf_workaround: true
   log_module_status: true
-  rtl_debug: 1
+  rtl_debug: 0
 
   on_message:
     - lambda: |-
