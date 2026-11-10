@@ -76,14 +76,19 @@ The existing `on_packet` lambda continues to log each accepted packet:
 - `RSSI`, `FREQEST`, `LQI`, and `DATA`: radio status and raw payload bytes.
 
 The driver now also emits these diagnostic messages. Its GDO0/RX FIFO threshold
-is set to 56 bytes (TI `FIFOTHR=13`). An `INVALID_PACKET` line now includes
+is set to 32 bytes (TI `FIFOTHR=7`). At 100 kbaud, the 32-byte threshold
+leaves about 2.56 ms before a 64-byte FIFO fills. The known reference Flowis
+frames (18/19 bytes) and the newer Type-1/Type-2 examples discussed so far fit
+below this threshold, so they should reach end-of-packet before the threshold
+event. An `INVALID_PACKET` line now includes
 `PKTSTATUS.SFD`, RSSI and up to 48 FIFO bytes captured before the receiver is
 flushed. `SFD=1` means the radio still considers the packet active; `SFD=0`
 means the sync/end-of-packet signal is no longer active. This is important
 because GDO0 mode `0x01` asserts both at the FIFO threshold and at packet end.
 The current diagnostic loop still flushes after logging; the raw preview is
 intended to identify the data and determine the correct receive-state-machine
-fix. The new preview code has not yet been compiled or tested on the hardware.
+fix. The 32-byte threshold and preview code have not yet been compiled or tested
+on the hardware.
 
 | Log tag | Meaning |
 |---|---|
