@@ -58,7 +58,7 @@ spi:
   mosi_pin: GPIO23
 
 # Native ESPHome CC1101 packet mode.
-# Settings copied from the successful v24.C.11 report in rtl_433 issue #2317.
+# Existing Flowis radio settings; packet reception uses a 56-byte diagnostic FIFO threshold.
 cc1101:
   cs_pin: GPIO5
   gdo0_pin: GPIO4
