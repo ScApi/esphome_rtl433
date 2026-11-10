@@ -25,6 +25,7 @@ CONF_MODULATION = "modulation"
 CONF_BITRATE = "bitrate"
 CONF_DEVIATION = "deviation"
 CONF_RX_BANDWIDTH = "rx_bandwidth"
+CONF_FLOWIS_DEBUG = "flowis_debug"
 CONF_MIN_PULSE_LENGTH = "min_pulse_length"
 
 # --- New config keys (rtl_433_ESP tuning options) ---
@@ -59,6 +60,8 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_RX_BANDWIDTH, default=270.0): cv.float_range(min=58.0, max=812.0),
         # Optional override for rtl_433_ESP pulse capture filter (microseconds).
         cv.Optional(CONF_MIN_PULSE_LENGTH): cv.int_range(min=1, max=1000),
+        # Enable verbose output only for the Flowis decoder in rtl_433_ESP.
+        cv.Optional(CONF_FLOWIS_DEBUG, default=False): cv.boolean,
         cv.Optional(CONF_ON_MESSAGE): automation.validate_automation(
             {
                 cv.GenerateID(CONF_ID): cv.declare_id(Rtl433MessageTrigger),
@@ -137,6 +140,11 @@ async def to_code(config):
     # The library defaults are 50 us for OOK and 30 us for FSK.
     if CONF_MIN_PULSE_LENGTH in config:
         cg.add_build_flag(f"-DMINIMUM_PULSE_LENGTH={config[CONF_MIN_PULSE_LENGTH]}")
+
+    # rtl_433_ESP FSK protocol table in the pinned source places Flowis at
+    # index 56. RTL_VERBOSE enables per-device verbosity for only that decoder.
+    if config[CONF_FLOWIS_DEBUG]:
+        cg.add_build_flag("-DRTL_VERBOSE=56")
 
     # Modulation: OOK (default) or FSK
     ook = "true" if config[CONF_MODULATION] == "OOK" else "false"
