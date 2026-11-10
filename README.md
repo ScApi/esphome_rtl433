@@ -113,6 +113,7 @@ rtl433:
 | `deviation` | float (1.587--380.8) | No | `40` | CC1101 FSK frequency deviation in kHz. Applied only when `modulation: FSK`. |
 | `rx_bandwidth` | float (58--812) | No | `270` | CC1101 FSK receiver bandwidth in kHz. RadioLib selects the nearest supported setting. Applied only when `modulation: FSK`. |
 | `min_pulse_length` | int (1--1000) | No | Library default (50 µs OOK / 30 µs FSK) | Minimum pulse width retained by the receiver capture filter, in microseconds. Shorter pulses are discarded before protocol decoding. Override only when the protocol needs shorter pulses. |
+| `flowis_debug` | bool | No | `false` | Enables verbose output for the Flowis protocol decoder only (pinned rtl_433_ESP FSK protocol index 56). Shows frame bytes and CRC failures when the Flowis preamble is detected, without enabling verbose output for every decoder. |
 | `on_message` | automation | No | -- | Trigger that fires with each decoded message; the variable `x` is a `std::string` containing the raw JSON |
 
 #### RSSI & signal detection
@@ -363,9 +364,14 @@ rtl433:
   deviation: 50         # kHz
   rx_bandwidth: 325     # kHz
   # min_pulse_length: 5  # Optional int (1-1000) -- minimum captured pulse width in microseconds
+  # flowis_debug: true  # Optional bool -- verbose logs from Flowis decoder only
 ```
 
 The component pins RadioLib to version `7.7.1`, which satisfies the `RadioLib (>=7.7.1)` dependency declared by rtl_433_ESP 0.6.3. In this version the CC1101 setters use kbps/kHz units, matching the YAML values above.
+
+### Flowis decoder diagnostics
+
+Set `flowis_debug: true` to enable per-protocol verbose logging only for the Flowis decoder in the pinned rtl_433_ESP source. When the decoder finds its expected preamble, it logs the extracted frame bytes and reports CRC failures. It does not log every failed preamble search; silence from this decoder therefore means no candidate passed its initial row/preamble checks, not necessarily that the radio received nothing. Keep `rtl_debug: 0` to avoid enabling verbose output globally for all protocols.
 
 ### Minimum pulse capture width
 
