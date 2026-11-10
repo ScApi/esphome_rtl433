@@ -373,7 +373,7 @@ The component pins RadioLib to version `7.7.1`, which satisfies the `RadioLib (>
 
 For newer Flowis+ ECO modules, this repository also contains an isolated test using ESPHome 2026.10.2+'s built-in `cc1101:` component in hardware FIFO/packet mode. It is intentionally separate from the `rtl433:` component because both must not initialize the same CC1101 simultaneously.
 
-See [the packet-mode example](example-flowis-cc1101-packet-mode.yaml), [the no-CRC diagnostic variant](example-flowis-cc1101-packet-mode-no-crc.yaml), and [test instructions](docs/flowis-cc1101-packet-mode.md). The test logs complete payload bytes, packet type, length, CRC-pass indication, RSSI, frequency estimate, and LQI; it does not yet decode meter values. For driver-level failure analysis, see the [ESPHome 2026.10.2 native CC1101 diagnostic patch](docs/cc1101-packet-diagnostics-esphome-2026.10.2.patch).
+See the [base packet-mode example](example-flowis-cc1101-packet-mode.yaml), [Home Assistant-ready diagnostic example](example-flowis-cc1101-packet-mode-diagnostic.yaml), [no-CRC test variant](example-flowis-cc1101-packet-mode-no-crc.yaml), and [installation/diagnostic guide](docs/flowis-cc1101-packet-mode.md). The diagnostic example loads a same-named external `cc1101:` override based on ESPHome 2026.10.2 and separates FIFO overflow, empty FIFO, invalid packet length, CRC rejection, and accepted packets in the logs. It does not yet decode meter values.
 
 ### Flowis decoder diagnostics
 
