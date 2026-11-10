@@ -373,7 +373,7 @@ The component pins RadioLib to version `7.7.1`, which satisfies the `RadioLib (>
 
 For newer Flowis+ ECO modules, this repository also contains an isolated test using ESPHome 2026.10.2+'s built-in `cc1101:` component in hardware FIFO/packet mode. It is intentionally separate from the `rtl433:` component because both must not initialize the same CC1101 simultaneously.
 
-See [the packet-mode example](example-flowis-cc1101-packet-mode.yaml) and [test instructions](docs/flowis-cc1101-packet-mode.md). The test logs complete payload bytes, packet type, length, CRC-pass indication, RSSI, frequency estimate, and LQI; it does not yet decode meter values.
+See [the packet-mode example](example-flowis-cc1101-packet-mode.yaml), [the no-CRC diagnostic variant](example-flowis-cc1101-packet-mode-no-crc.yaml), and [test instructions](docs/flowis-cc1101-packet-mode.md). The test logs complete payload bytes, packet type, length, CRC-pass indication, RSSI, frequency estimate, and LQI; it does not yet decode meter values.
 
 ### Flowis decoder diagnostics
 
