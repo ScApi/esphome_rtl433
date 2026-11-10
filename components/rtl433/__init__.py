@@ -25,6 +25,7 @@ CONF_MODULATION = "modulation"
 CONF_BITRATE = "bitrate"
 CONF_DEVIATION = "deviation"
 CONF_RX_BANDWIDTH = "rx_bandwidth"
+CONF_MIN_PULSE_LENGTH = "min_pulse_length"
 
 # --- New config keys (rtl_433_ESP tuning options) ---
 CONF_MIN_RSSI = "min_rssi"
@@ -56,6 +57,8 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_BITRATE, default=17.24): cv.float_range(min=0.025, max=600.0),
         cv.Optional(CONF_DEVIATION, default=40.0): cv.float_range(min=1.587, max=380.8),
         cv.Optional(CONF_RX_BANDWIDTH, default=270.0): cv.float_range(min=58.0, max=812.0),
+        # Optional override for rtl_433_ESP pulse capture filter (microseconds).
+        cv.Optional(CONF_MIN_PULSE_LENGTH): cv.int_range(min=1, max=1000),
         cv.Optional(CONF_ON_MESSAGE): automation.validate_automation(
             {
                 cv.GenerateID(CONF_ID): cv.declare_id(Rtl433MessageTrigger),
@@ -129,6 +132,11 @@ async def to_code(config):
 
     # Frequency
     cg.add_build_flag(f"-DRF_MODULE_FREQUENCY={config[CONF_FREQUENCY]}")
+
+    # Override the library pulse-width filter only when explicitly configured.
+    # The library defaults are 50 us for OOK and 30 us for FSK.
+    if CONF_MIN_PULSE_LENGTH in config:
+        cg.add_build_flag(f"-DMINIMUM_PULSE_LENGTH={config[CONF_MIN_PULSE_LENGTH]}")
 
     # Modulation: OOK (default) or FSK
     ook = "true" if config[CONF_MODULATION] == "OOK" else "false"
