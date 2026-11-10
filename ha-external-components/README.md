@@ -20,6 +20,7 @@ external_components:
       ref: experiment/flowis-cc1101-packet-diagnostics
       path: ha-external-components
     components: [cc1101]
+    refresh: 0s  # Force GitHub check on every validation during diagnostics
 ```
 
 The component name remains `cc1101:` and the existing packet-mode YAML does
