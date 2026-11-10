@@ -51,6 +51,7 @@ rtl433:
   bitrate: 100
   deviation: 50
   rx_bandwidth: 325
+  min_pulse_length: 5  # microseconds; capture short Flowis+ FSK pulses
 
   # Start with the same receive/debug approach as the Flowis tests.
   min_rssi: -82
