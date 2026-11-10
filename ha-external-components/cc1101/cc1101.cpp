@@ -808,12 +808,13 @@ void CC1101Component::set_packet_mode(bool value) {
   if (value) {
     // Configure GDO0 to assert at the RX FIFO threshold or end of packet.
     this->state_.GDO0_CFG = 0x01;
-    // FIFO_THR=13 means 56 bytes in RX FIFO (TI CC1101 datasheet, Table 36).
-    // This leaves headroom before the 64-byte FIFO overflows and lets loop()
-    // inspect the variable-length prefix of an overlong/malformed frame.
-    // Known Flowis frames (including the longer 51-byte candidate seen in
-    // diagnostics, plus its length byte) fit below this threshold.
-    this->state_.FIFO_THR = 13;
+    // FIFO_THR=7 means 32 bytes in RX FIFO (TI CC1101 datasheet, Table 36).
+    // At 100 kbaud this leaves about 2.56 ms before the 64-byte FIFO fills.
+    // Known Flowis frames (18/19 bytes in the rtl_433 reference capture; the
+    // newer Type-1/Type-2 examples are also below 32 bytes) should finish
+    // before this threshold and trigger on end-of-packet instead.
+    // Longer candidates trigger early so loop() can log them before overflow.
+    this->state_.FIFO_THR = 7;
     // Don't append status bytes to FIFO - we read from registers instead
     this->state_.APPEND_STATUS = 0;
   } else {
