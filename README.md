@@ -369,6 +369,12 @@ rtl433:
 
 The component pins RadioLib to version `7.7.1`, which satisfies the `RadioLib (>=7.7.1)` dependency declared by rtl_433_ESP 0.6.3. In this version the CC1101 setters use kbps/kHz units, matching the YAML values above.
 
+### Experimental Flowis hardware packet-mode test
+
+For newer Flowis+ ECO modules, this repository also contains an isolated test using ESPHome 2026.10.2+'s built-in `cc1101:` component in hardware FIFO/packet mode. It is intentionally separate from the `rtl433:` component because both must not initialize the same CC1101 simultaneously.
+
+See [the packet-mode example](example-flowis-cc1101-packet-mode.yaml) and [test instructions](docs/flowis-cc1101-packet-mode.md). The test logs complete payload bytes, packet type, length, CRC-pass indication, RSSI, frequency estimate, and LQI; it does not yet decode meter values.
+
 ### Flowis decoder diagnostics
 
 Set `flowis_debug: true` to enable per-protocol verbose logging only for the Flowis decoder in the pinned rtl_433_ESP source. When the decoder finds its expected preamble, it logs the extracted frame bytes and reports CRC failures. It does not log every failed preamble search; silence from this decoder therefore means no candidate passed its initial row/preamble checks, not necessarily that the radio received nothing. Keep `rtl_debug: 0` to avoid enabling verbose output globally for all protocols.
