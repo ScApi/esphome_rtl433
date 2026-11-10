@@ -3,9 +3,10 @@
 This folder is an external-component override of the bundled ESPHome `cc1101`
 component. It is based on upstream ESPHome **2026.10.2**. The Python schema,
 header files and register definitions are copied from that exact tag. The
-`cc1101.cpp` override adds diagnostic logging, separates FIFO/CRC conditions,
-and lowers the RX FIFO interrupt threshold to 32 bytes so overlong variable-
-length frames can be identified earlier, before they fill the 64-byte FIFO.
+`cc1101.cpp` override adds diagnostic logging and changes GDO0 packet-mode
+handling to trigger on the falling edge of the sync-word/end-of-packet signal
+(`IOCFG0=0x06`). The receive loop therefore reads the FIFO after packet end,
+not when the FIFO first reaches its threshold.
 
 ## Add to the existing Flowis YAML
 
