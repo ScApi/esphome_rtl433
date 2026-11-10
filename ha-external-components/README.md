@@ -2,9 +2,10 @@
 
 This folder is an external-component override of the bundled ESPHome `cc1101`
 component. It is based on upstream ESPHome **2026.10.2**. The Python schema,
-header files and register definitions are copied from that exact tag; only
-`cc1101.cpp`'s `CC1101Component::loop()` contains diagnostic logging and
-separates FIFO overflow, empty FIFO, malformed packet length and CRC rejection.
+header files and register definitions are copied from that exact tag. The
+`cc1101.cpp` override adds diagnostic logging, separates FIFO/CRC conditions,
+and lowers the RX FIFO interrupt threshold to 56 bytes so overlong variable-
+length frames can be identified before they fill the 64-byte FIFO.
 
 ## Add to the existing Flowis YAML
 
@@ -33,7 +34,8 @@ as the native `cc1101:` packet-mode driver.
 - `FLOWIS_DIAG FIFO_OVERFLOW`: CC1101 reported its RX FIFO overflow flag.
 - `FLOWIS_DIAG FIFO_EMPTY`: GDO0 was high but RXBYTES contained no bytes.
 - `FLOWIS_DIAG INVALID_PACKET`: the first length byte or FIFO byte count did
-  not match variable-length packet expectations.
+  not match variable-length packet expectations. The lower threshold is intended
+  to expose this earlier for frames whose length byte is greater than 64.
 - `FLOWIS_DIAG CRC_REJECT`: a packet was read, but the CC1101 CRC status bit
   was not set while CRC checking was enabled.
 - `FLOWIS_DIAG PACKET_ACCEPT`: the packet passed the component's current
