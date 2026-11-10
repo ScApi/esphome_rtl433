@@ -122,7 +122,9 @@ void CC1101Component::setup() {
     this->defer([this]() {
       this->gdo0_pin_->pin_mode(gpio::FLAG_INPUT);
       if (this->state_.PKT_FORMAT == static_cast<uint8_t>(PacketFormat::PACKET_FORMAT_FIFO)) {
-        this->gdo0_pin_->attach_interrupt(&CC1101Component::gpio_intr, this, gpio::INTERRUPT_RISING_EDGE);
+        // GDO0=0x06 stays high from sync-word detection through packet end.
+        // The falling edge signals end-of-packet (or FIFO overflow).
+        this->gdo0_pin_->attach_interrupt(&CC1101Component::gpio_intr, this, gpio::INTERRUPT_FALLING_EDGE);
       }
     });
   }
@@ -177,8 +179,11 @@ void CC1101Component::call_listeners_(const std::vector<uint8_t> &packet, float 
 
 void CC1101Component::loop() {
   this->disable_loop();
-  if (this->state_.PKT_FORMAT != static_cast<uint8_t>(PacketFormat::PACKET_FORMAT_FIFO) || this->gdo0_pin_ == nullptr ||
-      !this->gdo0_pin_->digital_read()) {
+  // In packet mode GDO0 is configured as SYNC_WORD_SENT_OR_RECEIVED (0x06).
+  // Its falling edge invokes this loop only when the packet ends (or is aborted).
+  // Do not require GDO0 to be high here: it has already fallen when this runs.
+  if (this->state_.PKT_FORMAT != static_cast<uint8_t>(PacketFormat::PACKET_FORMAT_FIFO) ||
+      this->gdo0_pin_ == nullptr) {
     return;
   }
 
@@ -806,14 +811,12 @@ void CC1101Component::set_packet_mode(bool value) {
   this->state_.PKT_FORMAT =
       static_cast<uint8_t>(value ? PacketFormat::PACKET_FORMAT_FIFO : PacketFormat::PACKET_FORMAT_ASYNC_SERIAL);
   if (value) {
-    // Configure GDO0 to assert at the RX FIFO threshold or end of packet.
-    this->state_.GDO0_CFG = 0x01;
-    // FIFO_THR=7 means 32 bytes in RX FIFO (TI CC1101 datasheet, Table 36).
-    // At 100 kbaud this leaves about 2.56 ms before the 64-byte FIFO fills.
-    // Known Flowis frames (18/19 bytes in the rtl_433 reference capture; the
-    // newer Type-1/Type-2 examples are also below 32 bytes) should finish
-    // before this threshold and trigger on end-of-packet instead.
-    // Longer candidates trigger early so loop() can log them before overflow.
+    // GDO0=0x06: high after sync word, low at packet end.
+    // The ISR is attached to the falling edge so loop() reads only a completed
+    // packet, not a partial FIFO snapshot taken at the FIFO threshold.
+    this->state_.GDO0_CFG = 0x06;
+    // Keep the FIFO threshold at 32 bytes. GDO0 no longer uses it as its
+    // interrupt source in sync-word mode; it remains a conservative setting.
     this->state_.FIFO_THR = 7;
     // Don't append status bytes to FIFO - we read from registers instead
     this->state_.APPEND_STATUS = 0;
@@ -824,7 +827,7 @@ void CC1101Component::set_packet_mode(bool value) {
   if (this->initialized_) {
     if (this->gdo0_pin_ != nullptr) {
       if (value) {
-        this->gdo0_pin_->attach_interrupt(&CC1101Component::gpio_intr, this, gpio::INTERRUPT_RISING_EDGE);
+        this->gdo0_pin_->attach_interrupt(&CC1101Component::gpio_intr, this, gpio::INTERRUPT_FALLING_EDGE);
       } else {
         this->gdo0_pin_->detach_interrupt();
       }
