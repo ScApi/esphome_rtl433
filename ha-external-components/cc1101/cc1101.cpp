@@ -224,9 +224,9 @@ void CC1101Component::loop() {
   if (payload_length == 0 || payload_length > 64 || rx_bytes != expected_rx) {
     this->read_(Register::MARCSTATE);
     ESP_LOGW(TAG,
-             "FLOWIS_DIAG INVALID_PACKET rxbytes_raw=0x%02X count=%u length=%u expected=%u "
+             "FLOWIS_DIAG INVALID_PACKET rxbytes_raw=0x%02X count=%u length=0x%02X (%u) expected=%u "
              "gdo0=%u marcstate=0x%02X",
-             rx_bytes_raw, rx_bytes, payload_length, expected_rx, this->gdo0_pin_->digital_read(),
+             rx_bytes_raw, rx_bytes, payload_length, payload_length, expected_rx, this->gdo0_pin_->digital_read(),
              this->state_.MARC_STATE);
     this->enter_idle_();
     this->strobe_(Command::FRX);
@@ -777,10 +777,14 @@ void CC1101Component::set_packet_mode(bool value) {
   this->state_.PKT_FORMAT =
       static_cast<uint8_t>(value ? PacketFormat::PACKET_FORMAT_FIFO : PacketFormat::PACKET_FORMAT_ASYNC_SERIAL);
   if (value) {
-    // Configure GDO0 for FIFO status (asserts on RX FIFO threshold or end of packet)
+    // Configure GDO0 to assert at the RX FIFO threshold or end of packet.
     this->state_.GDO0_CFG = 0x01;
-    // Set max RX FIFO threshold to ensure we only trigger on end-of-packet
-    this->state_.FIFO_THR = 15;
+    // FIFO_THR=13 means 56 bytes in RX FIFO (TI CC1101 datasheet, Table 36).
+    // This leaves headroom before the 64-byte FIFO overflows and lets loop()
+    // inspect the variable-length prefix of an overlong/malformed frame.
+    // Known Flowis frames (including the longer 51-byte candidate seen in
+    // diagnostics, plus its length byte) fit below this threshold.
+    this->state_.FIFO_THR = 13;
     // Don't append status bytes to FIFO - we read from registers instead
     this->state_.APPEND_STATUS = 0;
   } else {
