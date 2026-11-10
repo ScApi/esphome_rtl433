@@ -70,7 +70,7 @@ The next controlled diagnostic pass is provided as [`example-flowis-cc1101-packe
 
 ### Interpreting the FIFO warning
 
-ESPHome 2026.10.2 currently prints `RX FIFO overflow, flushing` for two different conditions: the actual RX FIFO overflow status bit is set **or** the reported RX byte count is zero. The log line does not distinguish these cases. The warning alone is therefore not proof that a packet exceeded the 64-byte FIFO. If it repeats without callbacks, the next code-level diagnostic should log both `RXBYTES.NUM_RXBYTES` and `RXBYTES.RXFIFO_OVERFLOW` separately.
+ESPHome 2026.10.2 currently prints `RX FIFO overflow, flushing` for two different conditions: the actual RX FIFO overflow status bit is set **or** the reported RX byte count is zero. The log line does not distinguish these cases. The warning alone is therefore not proof that a packet exceeded the 64-byte FIFO. A diagnostic replacement for `CC1101Component::loop()` is provided in [`cc1101-packet-diagnostics-esphome-2026.10.2.patch`](cc1101-packet-diagnostics-esphome-2026.10.2.patch). It separates `FIFO_OVERFLOW`, `FIFO_EMPTY`, `INVALID_PACKET`, `CRC_REJECT`, and `PACKET_ACCEPT`, with raw RXBYTES and radio status information. The patch is a manual overlay against ESPHome 2026.10.2, not an ESPHome external component and not a change to this repository's `components/rtl433`.
 
 ## Important implementation notes
 
