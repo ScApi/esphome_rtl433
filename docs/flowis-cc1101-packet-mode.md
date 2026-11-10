@@ -75,7 +75,13 @@ The existing `on_packet` lambda continues to log each accepted packet:
 - `CRC=OK`: the callback passed the component's hardware CRC acceptance rule.
 - `RSSI`, `FREQEST`, `LQI`, and `DATA`: radio status and raw payload bytes.
 
-The driver now also emits these diagnostic messages:
+The driver now also emits these diagnostic messages. Its GDO0/RX FIFO threshold
+is set to 56 bytes (TI `FIFOTHR=13`) rather than 64. This leaves eight bytes of
+headroom to inspect an oversized variable-length frame before the FIFO fills.
+The known Flowis payload candidate of 51 bytes plus the one-byte length prefix
+fits below this threshold. If the reported frame is malformed with a length
+byte such as `0xD8`, the expected result is an `INVALID_PACKET` line before a
+hardware overflow; scheduling latency may still allow an overflow to occur.
 
 | Log tag | Meaning |
 |---|---|
@@ -97,5 +103,5 @@ The controlled no-CRC variant for this same external-component diagnostic build 
 
 - This is a receiver diagnostic, not a production decoder.
 - The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to `CC1101Component::loop()`.
-- The code has been placed in the GitHub branch, but it has **not yet been compiled in your Home Assistant ESPHome environment or tested on the ESP32/CC1101 hardware**.
+- The code has been placed in the GitHub branch, but the latest 56-byte threshold adjustment has **not yet been compiled in your Home Assistant ESPHome environment or tested on the ESP32/CC1101 hardware**.
 - The current external `rtl433:` component cannot run at the same time as this native `cc1101:` instance on the same physical module.
