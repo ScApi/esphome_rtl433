@@ -112,6 +112,7 @@ rtl433:
 | `bitrate` | float (0.025--600) | No | `17.24` | CC1101 FSK bit rate in kbps. Applied only when `modulation: FSK`. |
 | `deviation` | float (1.587--380.8) | No | `40` | CC1101 FSK frequency deviation in kHz. Applied only when `modulation: FSK`. |
 | `rx_bandwidth` | float (58--812) | No | `270` | CC1101 FSK receiver bandwidth in kHz. RadioLib selects the nearest supported setting. Applied only when `modulation: FSK`. |
+| `min_pulse_length` | int (1--1000) | No | Library default (50 µs OOK / 30 µs FSK) | Minimum pulse width retained by the receiver capture filter, in microseconds. Shorter pulses are discarded before protocol decoding. Override only when the protocol needs shorter pulses. |
 | `on_message` | automation | No | -- | Trigger that fires with each decoded message; the variable `x` is a `std::string` containing the raw JSON |
 
 #### RSSI & signal detection
@@ -361,9 +362,14 @@ rtl433:
   bitrate: 100          # kbps
   deviation: 50         # kHz
   rx_bandwidth: 325     # kHz
+  # min_pulse_length: 5  # Optional int (1-1000) -- minimum captured pulse width in microseconds
 ```
 
 The component pins RadioLib to version `7.7.1`, which satisfies the `RadioLib (>=7.7.1)` dependency declared by rtl_433_ESP 0.6.3. In this version the CC1101 setters use kbps/kHz units, matching the YAML values above.
+
+### Minimum pulse capture width
+
+The `min_pulse_length` option overrides rtl_433_ESP's `MINIMUM_PULSE_LENGTH` compile-time filter. The value is in microseconds and affects pulse capture before protocol decoders run; it does not change the CC1101 bitrate, deviation, or receive bandwidth. When omitted, the upstream defaults remain in effect (50 µs for OOK and 30 µs for FSK). For the Flowis+ ECO `v24.C.11` test profile, the example uses `5` µs to avoid discarding short FSK pulses before the Flowis decoder can inspect them. A lower threshold can also admit more noise and increase capture/decoder load, so validate it against real transmissions.
 
 ## Frequency Selection
 
