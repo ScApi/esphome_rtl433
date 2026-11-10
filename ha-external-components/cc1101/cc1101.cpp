@@ -240,15 +240,15 @@ void CC1101Component::loop() {
       this->read_(Register::FIFO, preview, preview_len);
     }
 
-    static constexpr char HEX[] = "0123456789ABCDEF";
+    static constexpr char HEX_DIGITS[] = "0123456789ABCDEF";
     char preview_hex[48 * 3 + 1] = {};
     size_t pos = 0;
     for (uint8_t i = 0; i < preview_len; i++) {
       if (i > 0) {
         preview_hex[pos++] = ' ';
       }
-      preview_hex[pos++] = HEX[(preview[i] >> 4) & 0x0F];
-      preview_hex[pos++] = HEX[preview[i] & 0x0F];
+      preview_hex[pos++] = HEX_DIGITS[(preview[i] >> 4) & 0x0F];
+      preview_hex[pos++] = HEX_DIGITS[preview[i] & 0x0F];
     }
 
     ESP_LOGW(TAG,
