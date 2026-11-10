@@ -67,8 +67,8 @@ cc1101:
   on_packet:
     - lambda: |-
         // ESPHome's native CC1101 component removes the variable-length
-        // prefix before invoking on_packet. With CRC enabled, only packets
-        // that pass the CC1101 hardware CRC check reach this callback.
+        // prefix before invoking on_packet. CRC filtering is intentionally
+        // disabled in this diagnostic variant, so CRC is NOT verified here.
         char hex[64 * 3 + 1] = {};
         size_t used = 0;
         for (size_t i = 0; i < x.size() && used < sizeof(hex); ++i) {
