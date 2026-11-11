@@ -1,0 +1,322 @@
+# Flowis+ ECO - CC1101 packet mode with decoded ESPHome sensors.
+# Base: ESPHome 2026.10.2 and branch experiment/flowis-cc1101-packet-diagnostics.
+#
+# Copy the relevant sections into your existing flowis.yaml.
+# Keep your existing wifi, api, ota, esp32 and SPI pin configuration.
+# Do NOT add rtl433: / rtl_433_ESP; this configuration owns the CC1101 through cc1101:.
+#
+# IMPORTANT: Current captured frames decode to meter ID 241047300.
+# Your previous Home Assistant source entity contained 241047064.
+# Confirm which number belongs to the physical meter before relying on these readings.
+#
+# The packet callback accepts only frames that pass the CC1101 hardware CRC check.
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/ScApi/esphome_rtl433
+      ref: experiment/flowis-cc1101-packet-diagnostics
+      path: ha-external-components
+    components: [cc1101]
+    refresh: 0s
+
+esphome:
+  name: flowis-rtl433-868
+  friendly_name: Flowis RTL433 868
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+spi:
+  clk_pin: GPIO18
+  miso_pin: GPIO19
+  mosi_pin: GPIO23
+
+cc1101:
+  cs_pin: GPIO5
+  gdo0_pin: GPIO4
+
+  frequency: 868.00MHz
+  modulation_type: 2-FSK
+  symbol_rate: 100000
+  fsk_deviation: 50kHz
+  filter_bandwidth: 325kHz
+  if_frequency: 203kHz
+  sync_mode: 30/32
+  sync1: 0xD3
+  sync0: 0x91
+
+  packet_mode: true
+  packet_length: 0
+  crc_enable: true
+
+  on_packet:
+    - lambda: |-
+        // CRC is enabled in CC1101: this callback is reached only for CRC-valid packets.
+        // The CC1101 component removes the variable-length prefix and CRC bytes.
+        if (x.size() < 5) {
+          return;
+        }
+
+        const uint32_t meter_id =
+            static_cast<uint32_t>(x[1]) |
+            (static_cast<uint32_t>(x[2]) << 8) |
+            (static_cast<uint32_t>(x[3]) << 16) |
+            (static_cast<uint32_t>(x[4]) << 24);
+
+        // Set to 0 to accept any Flowis meter in RF range.
+        // Current captured frames decode to 241047300.
+        // Change only after checking the serial printed on the physical meter.
+        constexpr uint32_t EXPECTED_METER_ID = 241047300UL;
+        if (EXPECTED_METER_ID != 0 && meter_id != EXPECTED_METER_ID) {
+          ESP_LOGD("flowis_decode", "Ignoring meter ID %lu (expected %lu)",
+                   static_cast<unsigned long>(meter_id),
+                   static_cast<unsigned long>(EXPECTED_METER_ID));
+          return;
+        }
+
+        char meter_id_text[16];
+        snprintf(meter_id_text, sizeof(meter_id_text), "%lu",
+                 static_cast<unsigned long>(meter_id));
+        id(flowis_meter_number).publish_state(meter_id_text);
+        id(flowis_rssi).publish_state(rssi);
+        id(flowis_frequency_offset).publish_state(freq_offset);
+
+        if (x[0] == 0x01) {
+          // Type 1: current total, device timestamp, status bytes and previous-month-end total.
+          if (x.size() != 25) {
+            ESP_LOGW("flowis_decode", "Type 1 has unexpected payload length: %u",
+                     static_cast<unsigned>(x.size()));
+            return;
+          }
+
+          const uint32_t total_litres =
+              static_cast<uint32_t>(x[10]) |
+              (static_cast<uint32_t>(x[11]) << 8) |
+              (static_cast<uint32_t>(x[12]) << 16);
+
+          const uint32_t previous_month_end_litres =
+              static_cast<uint32_t>(x[21]) |
+              (static_cast<uint32_t>(x[22]) << 8) |
+              (static_cast<uint32_t>(x[23]) << 16) |
+              (static_cast<uint32_t>(x[24]) << 24);
+
+          // Do not replace a known value with an accidental zero.
+          if (total_litres > 0) {
+            id(flowis_total_m3).publish_state(total_litres / 1000.0f);
+          }
+
+          if (previous_month_end_litres <= total_litres) {
+            id(flowis_previous_month_end_m3).publish_state(
+              previous_month_end_litres / 1000.0f
+            );
+
+            // Type 1 independently provides current-month usage:
+            // current lifetime total minus previous month-end total.
+            id(flowis_month_0_m3).publish_state(
+              (total_litres - previous_month_end_litres) / 1000.0f
+            );
+          }
+
+          // Raw status fields. Their meanings are intentionally not converted
+          // to on/off alarm states until confirmed for this meter generation.
+          id(flowis_backflow_raw).publish_state(static_cast<float>(x[13]));
+          id(flowis_alarm_raw).publish_state(static_cast<float>(x[14]));
+
+          // Device timestamp bit packing from the upstream rtl_433 Flowis decoder.
+          const int year = 2000 + (x[9] >> 2);
+          const int month = (x[8] >> 6) | ((x[9] & 0x03) << 2);
+          const int day = (x[8] & 0x3E) >> 1;
+          const int hour = (x[7] >> 4) | ((x[8] & 0x01) << 4);
+          const int minute = ((x[7] & 0x0F) << 2) | ((x[6] & 0xC0) >> 6);
+          const int second = x[6] & 0x3F;
+
+          if (month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+              hour <= 23 && minute <= 59 && second <= 59) {
+            char device_time[24];
+            snprintf(device_time, sizeof(device_time),
+                     "%04d-%02d-%02d %02d:%02d:%02d",
+                     year, month, day, hour, minute, second);
+            id(flowis_meter_time).publish_state(device_time);
+          }
+
+          ESP_LOGI("flowis_decode",
+                   "TYPE1 meter=%lu total=%.3f m3 previous_month_end=%.3f m3 month_current=%.3f m3",
+                   static_cast<unsigned long>(meter_id),
+                   total_litres / 1000.0f,
+                   previous_month_end_litres / 1000.0f,
+                   (total_litres >= previous_month_end_litres)
+                     ? (total_litres - previous_month_end_litres) / 1000.0f
+                     : 0.0f);
+
+        } else if (x[0] == 0x02) {
+          // Type 2: seven little-endian uint16 monthly values in litres.
+          // Slot 0 = current month; slots 1..6 = previous six months.
+          if (x.size() != 19) {
+            ESP_LOGW("flowis_decode", "Type 2 has unexpected payload length: %u",
+                     static_cast<unsigned>(x.size()));
+            return;
+          }
+
+          for (size_t i = 0; i < 7; i++) {
+            const uint16_t litres =
+                static_cast<uint16_t>(x[5 + i * 2]) |
+                (static_cast<uint16_t>(x[6 + i * 2]) << 8);
+
+            // 0xFFFF is a special/invalid value, not 65.535 m3.
+            // Keep the previously published state when this sentinel occurs.
+            if (litres == 0xFFFF) {
+              continue;
+            }
+
+            const float value_m3 = litres / 1000.0f;
+            if (i == 0) {
+              id(flowis_month_0_m3).publish_state(value_m3);
+            } else if (i == 1) {
+              id(flowis_month_1_m3).publish_state(value_m3);
+            } else if (i == 2) {
+              id(flowis_month_2_m3).publish_state(value_m3);
+            } else if (i == 3) {
+              id(flowis_month_3_m3).publish_state(value_m3);
+            } else if (i == 4) {
+              id(flowis_month_4_m3).publish_state(value_m3);
+            } else if (i == 5) {
+              id(flowis_month_5_m3).publish_state(value_m3);
+            } else if (i == 6) {
+              id(flowis_month_6_m3).publish_state(value_m3);
+            }
+          }
+
+          ESP_LOGI("flowis_decode", "TYPE2 monthly values decoded for meter %lu",
+                   static_cast<unsigned long>(meter_id));
+        }
+
+sensor:
+  # Lifetime meter reading. This is the source for the retained HA sensor below.
+  - platform: template
+    name: "Flowis stan całkowity"
+    id: flowis_total_m3
+    device_class: water
+    state_class: total_increasing
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "Flowis stan na koniec poprzedniego miesiąca"
+    id: flowis_previous_month_end_m3
+    device_class: water
+    state_class: total_increasing
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  # Slot 0 rolls over at the start of a new calendar month, so it is total_increasing.
+  - platform: template
+    name: "Flowis zużycie bieżący miesiąc"
+    id: flowis_month_0_m3
+    device_class: water
+    state_class: total_increasing
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  # These are rolling history slots, not lifetime counters; no state_class is set.
+  - platform: template
+    name: "Flowis zużycie miesiąc -1"
+    id: flowis_month_1_m3
+    device_class: water
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "Flowis zużycie miesiąc -2"
+    id: flowis_month_2_m3
+    device_class: water
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "Flowis zużycie miesiąc -3"
+    id: flowis_month_3_m3
+    device_class: water
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "Flowis zużycie miesiąc -4"
+    id: flowis_month_4_m3
+    device_class: water
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "Flowis zużycie miesiąc -5"
+    id: flowis_month_5_m3
+    device_class: water
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "Flowis zużycie miesiąc -6"
+    id: flowis_month_6_m3
+    device_class: water
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "Flowis RSSI"
+    id: flowis_rssi
+    unit_of_measurement: "dBm"
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "Flowis przesunięcie częstotliwości"
+    id: flowis_frequency_offset
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "Flowis alarm raw"
+    id: flowis_alarm_raw
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "Flowis backflow raw"
+    id: flowis_backflow_raw
+    accuracy_decimals: 0
+    update_interval: never
+
+text_sensor:
+  - platform: template
+    name: "Flowis numer licznika"
+    id: flowis_meter_number
+    update_interval: never
+
+  - platform: template
+    name: "Flowis czas licznika"
+    id: flowis_meter_time
+    update_interval: never
