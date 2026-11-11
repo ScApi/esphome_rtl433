@@ -18,7 +18,7 @@ Under the hood the component wraps [rtl_433_ESP](https://github.com/NorthernMan5
 | Item | Notes |
 |------|-------|
 | ESP32 dev board | Any variant (ESP32, ESP32-S3, etc.) running Arduino framework |
-| CC1101 RF transceiver module | Widely available; make sure you get the 433 MHz version |
+| CC1101 RF transceiver module | Choose the hardware frequency variant for the target protocol. Flowis+ ECO uses 868 MHz. |
 | Jumper wires / PCB | Standard 2.54 mm header connections |
 
 > **Note:** This component targets the CC1101 only. ESPHome already has native support for SX127x-based radios, so that hardware path is not duplicated here.
@@ -369,19 +369,38 @@ rtl433:
 
 The component pins RadioLib to version `7.7.1`, which satisfies the `RadioLib (>=7.7.1)` dependency declared by rtl_433_ESP 0.6.3. In this version the CC1101 setters use kbps/kHz units, matching the YAML values above.
 
-### Experimental Flowis hardware packet-mode test
+### Flowis+ ECO (868 MHz) — native CC1101 packet mode
 
-For newer Flowis+ ECO modules, this repository also contains an isolated test using ESPHome 2026.10.2+'s built-in `cc1101:` component in hardware FIFO/packet mode. It is intentionally separate from the `rtl433:` component because both must not initialize the same CC1101 simultaneously.
+For newer Flowis+ ECO modules, this repository provides one maintained ESPHome example that receives
+hardware packets from the CC1101, checks the hardware CRC, decodes Type-1 and Type-2 frames, and
+publishes meter values as ESPHome sensors to Home Assistant.
 
-See the [base packet-mode example](example-flowis-cc1101-packet-mode.yaml), [Home Assistant-ready diagnostic example](example-flowis-cc1101-packet-mode-diagnostic.yaml), [no-CRC test variant](example-flowis-cc1101-packet-mode-no-crc.yaml), and [installation/diagnostic guide](docs/flowis-cc1101-packet-mode.md). The diagnostic example loads a same-named external `cc1101:` override based on ESPHome 2026.10.2 and separates FIFO overflow, empty FIFO, invalid packet length, CRC rejection, and accepted packets in the logs. It does not yet decode meter values.
+The currently confirmed radio module generation is **v24.C.11**, with **1/2026** printed on the
+module label and serial family **2409xxxxx**. Community testing reported that this generation is
+not encrypted and retains the established 2-FSK / 100 kbaud / D391D391 / CRC-16 radio format.
+Type-1 payloads are 25 bytes and Type-2 payloads are 19 bytes. This implementation was tested
+with ESPHome **2026.10.2** and an ESP32-WROOM-32 + CC1101.
 
-### Flowis decoder diagnostics
+- [Complete decoded ESPHome example](example-flowis-cc1101-homeassistant.yaml)
+- [Flowis compatibility, radio settings, frame layout and Home Assistant guide](docs/flowis-cc1101-packet-mode.md)
+- [Original Flowis community investigation](https://github.com/merbanan/rtl_433/issues/2317)
 
-Set `flowis_debug: true` to enable per-protocol verbose logging only for the Flowis decoder in the pinned rtl_433_ESP source. When the decoder finds its expected preamble, it logs the extracted frame bytes and reports CRC failures. It does not log every failed preamble search; silence from this decoder therefore means no candidate passed its initial row/preamble checks, not necessarily that the radio received nothing. Keep `rtl_debug: 0` to avoid enabling verbose output globally for all protocols.
+The 2022/2023 module reports are mixed: v24.8.00 / serial 2404 was reported working with the
+legacy rtl_433 decoder, while v24.C.06 / 2405 and v24.9.00 / 2406 were reported not decoding
+with the then-current rtl_433 decoder. This is not proof of encryption or a definitive support
+statement for every unit. Check the compatibility table in the guide.
+
+This packet-mode path uses ESPHome's built-in `cc1101:` component with the override from
+`ha-external-components`. **Do not enable `rtl433:` or rtl_433_ESP on the same CC1101 at the
+same time.**
+
+### Legacy rtl_433 Flowis decoder diagnostics
+
+The `flowis_debug: true` option belongs only to the legacy `rtl433:` / rtl_433_ESP pulse-capture path. When that decoder finds its expected preamble, it logs extracted frame bytes and CRC failures. It is not used by the native `cc1101:` hardware packet-mode Flowis+ example above. Keep `rtl_debug: 0` to avoid enabling verbose output globally for all protocols.
 
 ### Minimum pulse capture width
 
-The `min_pulse_length` option overrides rtl_433_ESP's `MINIMUM_PULSE_LENGTH` compile-time filter. The value is in microseconds and affects pulse capture before protocol decoders run; it does not change the CC1101 bitrate, deviation, or receive bandwidth. When omitted, the upstream defaults remain in effect (50 µs for OOK and 30 µs for FSK). For the Flowis+ ECO `v24.C.11` test profile, the example uses `5` µs to avoid discarding short FSK pulses before the Flowis decoder can inspect them. A lower threshold can also admit more noise and increase capture/decoder load, so validate it against real transmissions.
+The `min_pulse_length` option overrides rtl_433_ESP's `MINIMUM_PULSE_LENGTH` compile-time filter. The value is in microseconds and affects pulse capture before protocol decoders run; it does not change the CC1101 bitrate, deviation, or receive bandwidth. When omitted, the upstream defaults remain in effect (50 µs for OOK and 30 µs for FSK). This option affects only the legacy `rtl433:` pulse-capture path. It does not change the native `cc1101:` hardware packet mode used by the Flowis+ example above and is not needed for that configuration.
 
 ## Frequency Selection
 
