@@ -80,22 +80,23 @@ With the example names, the lifetime source entity will normally be
 **Developer Tools → States**; Home Assistant may preserve an earlier entity ID or add a suffix
 if an entity with the same ID already exists.
 
-## 4. Home Assistant: preserve the existing “last reading” entity
+## 4. Home Assistant: create a separate retained reading for the corrected meter
 
-Find the existing template sensor with:
+The former Home Assistant source `sensor.flowis_241047064_water_usage` belonged to an
+incorrect meter ID. The new Flowis frame identifies meter **241047300**. Because the old
+retained sensor may contain a value from a different meter (for example, around 6 m³), do
+not immediately reuse its existing `unique_id` for the new cumulative meter.
 
-- `unique_id: licznik_wody_ostatni_odczyt`
-- name `Licznik wody (ostatni odczyt)`
-
-Do **not** add a second sensor with the same unique ID. In its existing state template,
-replace the old source entity with the new ESPHome source. Keep the same name, unique ID,
-unit and classes:
+Reusing the same `unique_id` and changing its source from approximately 6 m³ to 40.059 m³
+could make Home Assistant interpret the difference as real water consumption in long-term
+statistics. Keep the old entity for its history, and create a new retained sensor with a new
+unique ID while verifying the new meter:
 
 ```yaml
 template:
   - sensor:
-      - name: "Licznik wody (ostatni odczyt)"
-        unique_id: licznik_wody_ostatni_odczyt
+      - name: "Licznik wody (ostatni odczyt Flowis)"
+        unique_id: licznik_wody_ostatni_odczyt_flowis
         unit_of_measurement: "m³"
         device_class: water
         state_class: total_increasing
@@ -110,14 +111,20 @@ template:
           {% endif %}
 ```
 
-If the existing `template:` section already exists in `configuration.yaml` or an included
-file, edit that existing sensor in place. Do not paste a second root-level `template:` key
-unless your configuration uses a separate included file.
+This template accepts only numeric values greater than zero. When the source is
+`unknown`, `unavailable`, empty or zero, it preserves the prior positive numeric state.
+Before the first good reading, it remains `unknown` instead of inventing a zero.
 
-This template accepts only numeric values greater than zero from the new source. When the
-source is `unknown`, `unavailable`, empty or zero, it keeps the prior numeric state. Before
-the entity has ever received a valid reading, it remains `unknown` rather than fabricating
-a numeric zero.
+If a `template:` section already exists in `configuration.yaml` or an included file, add
+this sensor under the existing section; do not paste a duplicate root-level `template:`
+key.
+
+After verifying that the new sensor reports the physical meter correctly, update your
+dashboard/cards/automations to use the new entity. You can then decide whether to retire the
+old incorrect entity. If you require the original entity ID to be reused, first consider
+the existing long-term statistics: changing a cumulative counter from one meter to another
+can create a false jump. Do not merge the old counter's history with the new meter without
+a deliberate statistics migration/reset plan.
 
 After editing, use **Developer Tools → YAML → Check configuration**, then reload Template
 Entities or restart Home Assistant if the UI offers no reload action for your configuration.
