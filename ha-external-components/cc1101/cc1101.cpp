@@ -362,6 +362,19 @@ void CC1101Component::set_idle() {
   this->enter_idle_();
 }
 
+void CC1101Component::power_down() {
+  if (!this->initialized_) {
+    ESP_LOGW(TAG, "Cannot power down CC1101 because it is not initialized");
+    return;
+  }
+
+  // CC1101 must be in IDLE before the PWD strobe. The SPI transaction's
+  // CSn rising edge after PWD completes entry into the hardware SLEEP state.
+  this->enter_idle_();
+  this->strobe_(Command::PWD);
+  ESP_LOGI(TAG, "CC1101 entered hardware power-down state");
+}
+
 bool CC1101Component::wait_for_state_(State target_state, uint32_t timeout_ms) {
   uint32_t start = millis();
   while (millis() - start < timeout_ms) {
