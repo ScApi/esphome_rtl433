@@ -334,3 +334,62 @@ text_sensor:
     name: "Flowis czas licznika"
     id: flowis_meter_time
     update_interval: never
+
+
+# ---------------------------------------------------------------------------
+# ENERGY SAVING SCHEDULE
+# Monday-Friday: receiver active 08:00-17:00.
+# Friday 17:00 through Monday 08:00: ESP32 and CC1101 enter deep sleep.
+# ---------------------------------------------------------------------------
+
+deep_sleep:
+  id: flowis_deep_sleep
+
+script:
+  - id: flowis_check_schedule
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: |-
+              const auto now = id(sntp_time).now();
+
+              // If time is not synchronized, stay awake rather than risk
+              // missing a meter transmission because of a wrong clock.
+              if (!now.is_valid()) {
+                return false;
+              }
+
+              // ESPHome weekday numbering: Sunday=1, Monday=2, ..., Saturday=7.
+              const bool weekend =
+                  now.day_of_week == 1 || now.day_of_week == 7;
+              const bool outside_work_hours =
+                  now.hour < 8 || now.hour >= 17;
+
+              return weekend || outside_work_hours;
+          then:
+            # Put the radio into its hardware SLEEP state before ESP32 deep sleep.
+            - cc1101.power_down:
+                id: flowis_radio
+            - delay: 100ms
+            - deep_sleep.enter:
+                id: flowis_deep_sleep
+                until: "08:00:00"
+                time_id: sntp_time
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Warsaw
+
+    # Check immediately after SNTP synchronizes, including after every reboot.
+    on_time_sync:
+      then:
+        - script.execute: flowis_check_schedule
+
+    # Additional check once per minute in case the device stays online.
+    on_time:
+      - seconds: 5
+        minutes: /1
+        then:
+          - script.execute: flowis_check_schedule
