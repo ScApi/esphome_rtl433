@@ -103,7 +103,7 @@ template:
           {% set current = states('sensor.flowis_stan_calkowity') %}
           {% if is_number(current) and current | float > 0 %}
             {{ current | float }}
-          {% elif is_number(this.state) %}
+          {% elif is_number(this.state) and this.state | float > 0 %}
             {{ this.state | float }}
           {% else %}
             {{ none }}
