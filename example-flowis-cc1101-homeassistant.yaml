@@ -10,6 +10,14 @@
 # and is intentionally not used here.
 #
 # The packet callback accepts only frames that pass the CC1101 hardware CRC check.
+#
+# Flowis packet-mode wiring for ESP32-WROOM-32 (tested):
+# CC1101 CSN  -> ESP32 GPIO5
+# CC1101 GDO0 -> ESP32 GPIO4
+# CC1101 SCK  -> ESP32 GPIO18
+# CC1101 MISO -> ESP32 GPIO19
+# CC1101 MOSI -> ESP32 GPIO23
+# CC1101 GDO2 is not connected/used in this native packet-mode configuration.
 
 external_components:
   - source:
@@ -82,9 +90,11 @@ cc1101:
             (static_cast<uint32_t>(x[3]) << 16) |
             (static_cast<uint32_t>(x[4]) << 24);
 
-        // Set to 0 to accept any Flowis meter in RF range.
-        // Current captured frames decode to 241047300.
-        // Change only after checking the serial printed on the physical meter.
+        // METER ID FILTER — change this number to the serial/ID of your own meter.
+        // Current received meter: 241047300 (bytes 04 17 5E 0E, little-endian).
+        // If you change the meter, edit ONLY the number on the next line.
+        // Set to 0 temporarily to accept any received Flowis meter (not recommended
+        // when more than one meter is within radio range).
         constexpr uint32_t EXPECTED_METER_ID = 241047300UL;
         if (EXPECTED_METER_ID != 0 && meter_id != EXPECTED_METER_ID) {
           ESP_LOGD("flowis_decode", "Ignoring meter ID %lu (expected %lu)",
