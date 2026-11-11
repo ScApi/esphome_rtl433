@@ -75,7 +75,7 @@ W pliku urządzenia użyj źródła komponentu z tej gałęzi:
 external_components:
   - source:
       type: git
-      url: https://github.com/ScApi/FlowisPlus-ESPHome
+      url: https://github.com/ScApi/esphome_rtl433
       ref: main
       path: ha-external-components
     components: [cc1101]
