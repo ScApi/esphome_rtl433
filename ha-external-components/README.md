@@ -53,3 +53,27 @@ The example uses `spi.clk_pin: GPIO18`, `spi.miso_pin: GPIO19`,
 **Do not load** the separate `rtl433:` / rtl_433_ESP component at the same time. Both drivers
 would attempt to control the same physical CC1101 over SPI. This packet-mode override is the
 only CC1101 driver in this configuration.
+
+
+## Optional scheduled power-down
+
+The packet-mode override exposes an action that places the CC1101 into its hardware SLEEP state
+before ESP32 deep sleep:
+
+```yaml
+cc1101:
+  id: flowis_radio
+
+# In an automation immediately before deep_sleep.enter:
+- cc1101.power_down:
+    id: flowis_radio
+- delay: 100ms
+- deep_sleep.enter:
+    id: flowis_deep_sleep
+    until: "08:00:00"
+    time_id: sntp_time
+```
+
+Use `cc1101.power_down` only immediately before putting the ESP32 to sleep. The CC1101 is
+reinitialized during the next ESP32 boot. See the Flowis guide for the complete weekday/weekend
+schedule and the Home Assistant availability/OTA implications.
