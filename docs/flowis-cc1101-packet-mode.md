@@ -127,11 +127,15 @@ sterownik rtl433 nie mogą jednocześnie obsługiwać tego samego modułu po SPI
 
 ## 3. Co zmienić, aby dekodować stan licznika
 
-W przykładzie ESPHome filtr identyfikatora znajduje się wewnątrz lambdy on_packet:
+W pliku `example-flowis-cc1101-homeassistant.yaml` filtr identyfikatora znajduje się wewnątrz
+`cc1101:` → `on_packet:` → `lambda:`. Wyszukaj stałą:
 
 ```cpp
 constexpr uint32_t EXPECTED_METER_ID = 241047300UL;
 ```
+
+Zmień wyłącznie liczbę `241047300` na identyfikator swojego licznika (zachowaj końcówkę `UL`).
+Nie zmieniaj kolejności bajtów w dekoderze — konwersja ID z ramki jest już little-endian.
 
 W aktualnie przechwyconych ramkach identyfikator jest zapisany jako bajty
 `04 17 5E 0E` w kolejności little-endian, co daje **241047300**.
@@ -225,6 +229,11 @@ Pełny YAML tworzy sensory:
 - bieżący miesiąc z Type-2 oraz osobny sensor kontrolny wyliczony z Type-1;
 - sześć wcześniejszych wartości miesięcznych z Type-2;
 - RSSI, LQI i przesunięcie częstotliwości;
+
+Klasy `total_increasing` i `device_class: water` są przypisane do skumulowanego stanu licznika
+oraz skumulowanego wskazania na koniec poprzedniego miesiąca. Sensory zużycia miesięcznego i
+sensor kontrolny nie mają klasy licznika narastającego ani klasy urządzenia water, ponieważ
+ich wartości dotyczą okresu miesięcznego i mogą zmienić się/wyzerować przy granicy miesiąca.
 - surowe bajty alarmu i backflow;
 - numer i czas zapisany w liczniku.
 
