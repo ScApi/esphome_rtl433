@@ -1,5 +1,5 @@
 # Flowis+ ECO - CC1101 packet mode with decoded ESPHome sensors.
-# Base: ESPHome 2026.10.2 and branch experiment/flowis-cc1101-packet-diagnostics.
+# Base: ESPHome 2026.10.2 and the FlowisPlus-ESPHome main branch.
 #
 # Copy the relevant sections into your existing flowis.yaml.
 # Keep your existing wifi, api, ota, esp32 and SPI pin configuration.
@@ -22,8 +22,8 @@
 external_components:
   - source:
       type: git
-      url: https://github.com/ScApi/esphome_rtl433
-      ref: experiment/flowis-cc1101-packet-diagnostics
+      url: https://github.com/ScApi/FlowisPlus-ESPHome
+      ref: main
       path: ha-external-components
     components: [cc1101]
     refresh: 0s
