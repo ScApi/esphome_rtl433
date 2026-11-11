@@ -329,11 +329,6 @@ Po dodaniu urządzenia sprawdź rzeczywiste identyfikatory encji w Home Assistan
 
 ### Zachowanie ostatniej poprawnej wartości w Home Assistant
 
-Ponieważ poprzedni sensor był oparty na błędnym ID i pokazywał około 6 m³, nie należy podmieniać
-jego źródła i zachowywać tego samego unique_id licznika total_increasing bez kontroli historii.
-Home Assistant mógłby uznać skok z około 6 do 40.059 m³ za rzeczywiste zużycie wody i włączyć
-go do statystyk długoterminowych.
-
 Na czas weryfikacji utwórz osobny sensor z nowym unique_id:
 
 ```yaml
@@ -359,10 +354,6 @@ Jeśli w configuration.yaml istnieje już sekcja template:, dodaj sensor pod tą
 tworzyć drugą sekcję o tej samej nazwie. Ten szablon przyjmuje tylko dodatnią wartość liczbową,
 a w przypadku unknown, unavailable, pustego stanu lub zera zachowuje poprzedni dodatni odczyt.
 Przed pierwszym poprawnym odczytem pozostaje unknown, nie tworzy sztucznego zera.
-
-Po potwierdzeniu zgodności odczytu z fizycznym licznikiem można przełączyć dashboardy i
-automatyzacje na nowy sensor. Starej historii statystyk nie należy łączyć automatycznie
-z nowym licznikiem bez przemyślanego resetu/migracji.
 
 ## 6. Instalacja i weryfikacja
 
