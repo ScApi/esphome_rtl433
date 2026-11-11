@@ -1,26 +1,115 @@
-# Flowis+ ECO — CC1101 hardware packet-mode test
+# Flowis+ ECO — odbiór CC1101, dekodowanie i Home Assistant
 
-This is an isolated receiver test for the newer Flowis+ ECO radio modules, including the reported `v24.C.11` generation.
+Ten dokument opisuje jedną, docelową ścieżkę odbioru nowszych modułów radiowych Flowis+ ECO:
+ESP32 + CC1101, natywny sprzętowy tryb pakietowy ESPHome, dekodowanie Type-1/Type-2 i sensory
+udostępniane przez API ESPHome do Home Assistant.
 
-It uses ESPHome's `cc1101:` component in hardware FIFO/packet mode. The diagnostic variant overrides the bundled ESPHome CC1101 component with the source in this repository, based on upstream **ESPHome 2026.10.2**. It does not use `rtl_433_ESP`, the separate `rtl433:` external component, or RadioLib's asynchronous pulse-capture path.
+**Testowana konfiguracja:** ESPHome 2026.10.2, ESP32-WROOM-32 i CC1101. W dniu 2026-11-11
+odbiornik uzyskał ramki Type-1 i Type-2 z poprawnym sprzętowym CRC, przy strojeniu 868.00 MHz
+i RSSI około -65 dBm.
 
-## Why this test exists
+Kompletny przykład do skopiowania znajduje się w pliku
+[example-flowis-cc1101-homeassistant.yaml](../example-flowis-cc1101-homeassistant.yaml).
+Nie należy łączyć go z komponentem rtl433 na tym samym module CC1101.
 
-The Flowis+ report in [merbanan/rtl_433#2317](https://github.com/merbanan/rtl_433/issues/2317) describes a successful CC1101 packet-mode configuration for a newer `v24.C.11` module:
+## 1. Kompatybilność — generacje modułów i oprogramowanie
 
-- 2-FSK, 100 kbaud
-- frequency deviation 50 kHz
-- RX filter 325 kHz
-- IF frequency 203 kHz
-- carrier about 868.044 MHz
-- sync word D391, sync mode 30/32
-- variable-length packets and hardware CRC
+Wątek [merbanan/rtl_433 #2317](https://github.com/merbanan/rtl_433/issues/2317) zawiera obserwacje
+kilku generacji. Nie jest to oficjalna tabela kompatybilności producenta — poniższe informacje
+mają status opisanych testów społeczności.
 
-The native packet-mode test separates radio packet reception from the rtl_433 decoder path.
+| Oznaczenie modułu / data na etykiecie | Seria numerów podana w wątku | Stan rozpoznania | Zalecana ścieżka |
+|---|---|---|---|
+| v24.8.00, 03/2022 | 2404… | Użytkownik zgłosił poprawne dekodowanie przez starszy wbudowany dekoder Flowis w rtl_433. | Klasyczny dekoder rtl_433 / rtl_433_ESP dla zgodnych ramek. |
+| v24.C.06, 02/2023 | 2405… | Zgłoszono brak dekodowania przez ówczesny dekoder rtl_433. Przyczyna nie została rozstrzygnięta. | Brak potwierdzonej zgodności w tej konfiguracji. |
+| v24.9.00, 06/2023 | 2406… | Zgłoszono brak dekodowania przez ówczesny dekoder rtl_433. Nie dowodzi to szyfrowania. | Brak potwierdzonej zgodności w tej konfiguracji. |
+| **v24.C.11, 1/2026** | **2409xxxxx** | Autor wątku potwierdził odbiór niezaszyfrowanych ramek. Ten sam PHY, sync word i CRC; Type-1 ma 25 bajtów, Type-2 19 bajtów. | **Potwierdzona ścieżka: ESPHome 2026.10.2 + natywny CC1101 packet mode + dekoder z przykładu w tym repozytorium.** |
 
-## Wiring
+Wpis 1/2026 oznacza datę widoczną na etykiecie modułu radiowego; v24.C.11 to jego oznaczenie wersji.
+Nie oznacza to, że każdy licznik wyprodukowany od stycznia 2026 r. został przetestowany.
+Potwierdzenie dotyczy konkretnego modułu v24.C.11 z serii 2409xxxxx i ramek pokazanych w wątku.
 
-ESP32-WROOM-32 to CC1101:
+### Jakie oprogramowanie dekoduje poszczególne typy?
+
+- **Wbudowany dekoder Flowis w rtl_433:** obsługa Type-1 została dodana w 2023 r. (PR
+  [#2357](https://github.com/merbanan/rtl_433/pull/2357)). Historyczny dekoder rozpoznaje starszy
+  układ Type-1; Type-2 nie był przez niego dekodowany.
+- **Dekodowanie Type-2 w rtl_433:** PR
+  [#3785](https://github.com/merbanan/rtl_433/pull/3785) dodaje siedem miesięcznych wartości Type-2.
+  Stan PR sprawdzony 2026-11-11: **otwarty**, więc nie należy zakładać, że poprawka znajduje się
+  w standardowym wydaniu rtl_433.
+- **Ten przykład ESPHome:** nie korzysta z dekodera rtl_433. Odbiera ramki przez sprzętowy packet
+  mode CC1101, a następnie dekoduje Type-1 i Type-2 w lambdzie ESPHome. Test wykonano na ESPHome
+  2026.10.2. Komponent CC1101 jest override'em wersji wbudowanej w tę wersję ESPHome.
+
+Nie należy utożsamiać braku dekodowania przez starszy SDR/rtl_433 z szyfrowaniem. Raport dla
+v24.C.11 wyraźnie potwierdza brak szyfrowania i poprawny sprzętowy CRC.
+
+## 2. Ustawienia radia
+
+Dla opisanej generacji protokół radiowy ma następujące parametry:
+
+| Parametr | Wartość |
+|---|---|
+| Modulacja | 2-FSK |
+| Szybkość symbolowa | 100 kbaud |
+| Odchylenie FSK | 50 kHz |
+| Sync word | D391D391 |
+| Tryb synchronizacji | 30/32 |
+| Długość pakietu | zmienna |
+| CRC | CRC-16, wielomian 0x8005, init 0xFFFF |
+| Pasmo odbiornika | 325 kHz w sprawdzonym profilu |
+| IF | 203 kHz w sprawdzonym profilu |
+
+Ważne: wątek opisuje nośną około 868.044 MHz, ale rzeczywiste strojenie zależy od egzemplarza
+modułu i lokalnego odbiornika. W testowanej instalacji użytkownika poprawne ramki CRC uzyskano
+przy 868.00 MHz. **Nie podmieniaj automatycznie częstotliwości działającej instalacji na 868.04 MHz.**
+Najpierw potwierdź odbiór poprawnego CRC i stabilny RSSI po każdej zmianie częstotliwości.
+
+### Konfiguracja ESPHome
+
+W pliku urządzenia użyj źródła komponentu z tej gałęzi:
+
+```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/ScApi/esphome_rtl433
+      ref: experiment/flowis-cc1101-packet-diagnostics
+      path: ha-external-components
+    components: [cc1101]
+    refresh: 0s
+```
+
+Następnie konfiguracja radia:
+
+```yaml
+spi:
+  clk_pin: GPIO18
+  miso_pin: GPIO19
+  mosi_pin: GPIO23
+
+cc1101:
+  cs_pin: GPIO5
+  gdo0_pin: GPIO4
+  frequency: 868.00MHz
+  modulation_type: 2-FSK
+  symbol_rate: 100000
+  fsk_deviation: 50kHz
+  filter_bandwidth: 325kHz
+  if_frequency: 203kHz
+  sync_mode: 30/32
+  sync1: 0xD3
+  sync0: 0x91
+  packet_mode: true
+  packet_length: 0
+  crc_enable: true
+```
+
+Wartość 868.00 MHz jest wartością zweryfikowaną w tej konkretnej instalacji, a nie uniwersalną
+częstotliwością gwarantowaną dla wszystkich modułów.
+
+Podłączenie użyte w przykładzie ESP32-WROOM-32:
 
 | CC1101 | ESP32 |
 |---|---:|
@@ -31,93 +120,171 @@ ESP32-WROOM-32 to CC1101:
 | MOSI | GPIO23 |
 | VCC | 3.3 V |
 | GND | GND |
+| GDO2 | nieużywany |
 
-GDO2 is not used by this native ESPHome packet-mode test.
+**Nie dodawaj** równolegle komponentu rtl433 lub rtl_433_ESP. Natywny CC1101 packet mode i
+sterownik rtl433 nie mogą jednocześnie obsługiwać tego samego modułu po SPI.
 
-## Install from the Home Assistant ESPHome dashboard
+## 3. Co zmienić, aby dekodować stan licznika
 
-1. Use ESPHome **2026.10.2 or newer**.
-2. In the ESPHome device YAML editor, either use [the diagnostic example](../example-flowis-cc1101-packet-mode-diagnostic.yaml) as the starting point or copy its `external_components:` block into your existing Flowis YAML.
-3. Keep your existing Wi-Fi secrets and the current radio settings. Do not change `crc_enable: true` for this diagnostic run.
-4. Save, validate, and compile from the ESPHome dashboard. Then install the compiled firmware to the ESP32.
-5. Open the device logs and leave the receiver running near the meter.
+W przykładzie ESPHome filtr identyfikatora znajduje się wewnątrz lambdy on_packet:
 
-The required override block is:
+```cpp
+constexpr uint32_t EXPECTED_METER_ID = 241047300UL;
+```
+
+W aktualnie przechwyconych ramkach identyfikator jest zapisany jako bajty
+`04 17 5E 0E` w kolejności little-endian, co daje **241047300**.
+Wcześniejsze ID 241047064 pochodziło z błędnej konfiguracji Home Assistant i nie jest używane
+przez nowy dekoder.
+
+Jeżeli kiedyś trzeba będzie uruchomić odbiór diagnostyczny bez filtrowania identyfikatora,
+można ustawić EXPECTED_METER_ID na 0. W normalnej pracy lepiej pozostawić filtr włączony,
+aby nie łączyć danych z kilku liczników znajdujących się w zasięgu.
+
+### Type-1 — stan całkowity i status
+
+Callback ESPHome otrzymuje dane bez bajtu długości oraz bez dwóch bajtów CRC.
+Dla aktualnej ramki Type-1 payload ma 25 bajtów, pierwszy bajt to 0x01.
+
+| Indeks w x | Znaczenie | Sposób przeliczenia |
+|---|---|---|
+| 0 | Typ wiadomości 0x01 | identyfikacja Type-1 |
+| 1–4 | ID licznika | uint32 little-endian |
+| 5 | bajt stały / nieznany w tym układzie | zachować, nie interpretować |
+| 6–9 | czas urządzenia | bit-packed; dekoder używa układu upstream Flowis |
+| 10–12 | stan całkowity w litrach | uint24 little-endian / 1000 = m³ |
+| 13 | surowy status backflow | znaczenie surowych bitów pozostaje do potwierdzenia |
+| 14 | surowy bajt alarmu | znaczenie surowych bitów pozostaje do potwierdzenia |
+| 15–20 | pola dodatkowe | nieinterpretowane |
+| 21–24 | stan na koniec poprzedniego miesiąca w litrach | uint32 little-endian / 1000 = m³ |
+
+Zużycie bieżącego miesiąca można obliczyć z Type-1:
+stan całkowity minus stan skumulowany na koniec poprzedniego miesiąca.
+
+### Type-2 — zużycie miesięczne
+
+Type-2 ma 19 bajtów payloadu i zaczyna się od 0x02.
+
+| Indeksy w x | Znaczenie |
+|---|---|
+| 0 | Typ wiadomości 0x02 |
+| 1–4 | ID licznika, uint32 little-endian |
+| 5–18 | siedem wartości uint16 little-endian w litrach |
+
+Kolejność siedmiu wartości: bieżący miesiąc, poprzedni miesiąc i kolejnych pięć wcześniejszych
+miesięcy — razem siedem miesięcy. Każdą prawidłową wartość należy podzielić przez 1000, aby
+otrzymać m³. Wartość 0xFFFF jest traktowana jako wartość specjalna/nieprawidłowa i nie jest
+publikowana jako 65.535 m³. Zwykłe zero może być prawidłową wartością, np. na początku nowego
+miesiąca.
+
+## 4. Przykładowe wartości z odbioru użytkownika
+
+Ramka Type-1 z 2026-11-11:
+
+```
+01 04 17 5E 0E C1 98 93 D6 6A 7B 9C 00 00 01 00 00 A5 0B 00 80 E9 8F 00 00
+```
+
+Zdekodowane wartości:
+
+- ID: 241047300
+- czas urządzenia: 2026-11-11 09:14:24
+- stan całkowity: 40.059 m³
+- stan skumulowany na koniec poprzedniego miesiąca: 36.841 m³
+- różnica bieżącego miesiąca: 3.218 m³
+
+Ramka Type-2:
+
+```
+02 04 17 5E 0E 92 0C DE 2B 93 27 79 29 04 12 01 00 FF FF
+```
+
+Zużycie miesięczne w kolejności od bieżącego miesiąca:
+
+**3.218; 11.230; 10.131; 10.617; 4.612; 0.001 m³**, a ostatnia pozycja jest oznaczona 0xFFFF
+i nie jest publikowana.
+
+Wartości bieżącego miesiąca z obu ramek są zgodne:
+40.059 m³ - 36.841 m³ = 3.218 m³.
+
+**Uwaga przy porównaniu z rachunkiem:** 36.841 m³ z Type-1 to stan skumulowany licznika
+na koniec poprzedniego miesiąca, a nie zużycie w tym miesiącu. Type-2 podaje zużycie za
+poprzedni miesiąc jako osobną wartość — w pokazanej ramce jest to 11.230 m³. Jeśli rachunek
+za miesiąc wskazuje 36 m³ zużycia, a nie stan licznika, tych wartości nie należy uznawać
+za zgodne. Trzeba porównać okres rozliczeniowy, numer licznika i wskazania z rachunku.
+
+## 5. Encje ESPHome i Home Assistant
+
+Pełny YAML tworzy sensory:
+
+- stan całkowity w m³ z klasą total_increasing;
+- stan całkowity na koniec poprzedniego miesiąca;
+- bieżący miesiąc i sześć poprzednich wartości miesięcznych;
+- RSSI i przesunięcie częstotliwości;
+- surowe bajty alarmu i backflow;
+- numer i czas zapisany w liczniku.
+
+Po dodaniu urządzenia sprawdź rzeczywiste identyfikatory encji w Home Assistant:
+**Narzędzia deweloperskie → Stany**.
+
+### Zachowanie ostatniej poprawnej wartości w Home Assistant
+
+Ponieważ poprzedni sensor był oparty na błędnym ID i pokazywał około 6 m³, nie należy podmieniać
+jego źródła i zachowywać tego samego unique_id licznika total_increasing bez kontroli historii.
+Home Assistant mógłby uznać skok z około 6 do 40.059 m³ za rzeczywiste zużycie wody i włączyć
+go do statystyk długoterminowych.
+
+Na czas weryfikacji utwórz osobny sensor z nowym unique_id:
 
 ```yaml
-external_components:
-  - source:
-      type: git
-      url: https://github.com/ScApi/esphome_rtl433
-      ref: experiment/flowis-cc1101-packet-diagnostics
-      path: ha-external-components
-    components: [cc1101]
-    refresh: 0s  # Force GitHub check on every validation during diagnostics
+template:
+  - sensor:
+      - name: "Licznik wody (ostatni odczyt Flowis)"
+        unique_id: licznik_wody_ostatni_odczyt_flowis
+        unit_of_measurement: "m³"
+        device_class: water
+        state_class: total_increasing
+        state: >
+          {% set current = states('sensor.flowis_stan_calkowity') %}
+          {% if is_number(current) and current | float > 0 %}
+            {{ current | float }}
+          {% elif is_number(this.state) and this.state | float > 0 %}
+            {{ this.state | float }}
+          {% else %}
+            {{ none }}
+          {% endif %}
 ```
 
-Place it at the top level of the YAML. If your file already contains `external_components:`, append this source to its list; do not create a second key.
+Jeśli w configuration.yaml istnieje już sekcja template:, dodaj sensor pod tą sekcją zamiast
+tworzyć drugą sekcję o tej samej nazwie. Ten szablon przyjmuje tylko dodatnią wartość liczbową,
+a w przypadku unknown, unavailable, pustego stanu lub zera zachowuje poprzedni dodatni odczyt.
+Przed pierwszym poprawnym odczytem pozostaje unknown, nie tworzy sztucznego zera.
 
-This repository folder deliberately contains a same-named `cc1101` component, which ESPHome loads as an override of its bundled component. You do **not** need to access the add-on container, use a Windows shell, edit ESPHome's installed Python package, or copy files manually.
+Po potwierdzeniu zgodności odczytu z fizycznym licznikiem można przełączyć dashboardy i
+automatyzacje na nowy sensor. Starej historii statystyk nie należy łączyć automatycznie
+z nowym licznikiem bez przemyślanego resetu/migracji.
 
-**Do not add** the separate `rtl433:` component or the old `esphome_rtl433/components` source to this packet-mode test. The override remains the only component that initializes the CC1101 on SPI. It is an external override for `cc1101:`, not a second radio driver.
+## 6. Instalacja i weryfikacja
 
-## What the log means
+1. Użyj ESPHome 2026.10.2.
+2. W istniejącym pliku flowis.yaml zachowaj swoje dane Wi-Fi, API, OTA i konfigurację ESP32.
+3. Dodaj override external_components i konfigurację cc1101 z rozdziału 2.
+4. Skopiuj z kompletnego przykładu blok on_packet oraz sekcje sensor i text_sensor.
+5. Upewnij się, że masz tylko jeden wpis sensor: i jeden text_sensor: na głównym poziomie YAML.
+6. Uruchom Validate przed kompilacją, następnie zainstaluj firmware i sprawdź logi.
+7. Oczekuj FLOWIS_DIAG PACKET_ACCEPT z crc_en=1, crc_ok=1, Type-1 len=25 i Type-2 len=19 oraz logów flowis_decode.
+8. Porównaj stan całkowity, numer ID i okresy miesięczne z fizycznym licznikiem oraz dokumentem rozliczeniowym.
 
-The existing `on_packet` lambda continues to log each accepted packet:
+Nie interpretuj surowych alarm/backflow ani specjalnego 0xFFFF jako rzeczywistych odczytów.
+Dekoder nie publikuje niepotwierdzonych typów ramek.
 
-```text
-[flowis_pkt] RX type=type-1 len=25 CRC=OK RSSI=-63.0 dBm FREQEST=+4000 Hz LQI=... DATA=[...]
-```
+## Źródła i status implementacji
 
-- `type-1`: first data byte is `0x01`; the newer reports show 25 data bytes.
-- `type-2`: first data byte is `0x02`; the newer reports show 19 data bytes.
-- `len`: bytes delivered by ESPHome's `on_packet` callback. The variable-length prefix is consumed by the driver.
-- `CRC=OK`: the callback passed the component's hardware CRC acceptance rule.
-- `RSSI`, `FREQEST`, `LQI`, and `DATA`: radio status and raw payload bytes.
+- [rtl_433 issue #2317 — obserwacje modułu v24.C.11 z etykietą 1/2026](https://github.com/merbanan/rtl_433/issues/2317)
+- [rtl_433 PR #2357 — oryginalny dekoder Flowis Type-1](https://github.com/merbanan/rtl_433/pull/2357)
+- [rtl_433 PR #3785 — dekodowanie siedmiu miesięcznych wartości Type-2](https://github.com/merbanan/rtl_433/pull/3785); sprawdzony 2026-11-11 jako otwarty
+- [Kompletny przykład ESPHome z dekoderem i sensorami](../example-flowis-cc1101-homeassistant.yaml)
 
-The driver now configures GDO0 as `0x06` (sync word received / end of packet)
-and attaches an interrupt on the **falling edge**. This means the receive loop
-is entered after the CC1101 reports packet end, rather than when GDO0 first
-asserts at the FIFO threshold. The FIFO threshold remains at 32 bytes, but it
-is no longer the GDO0 interrupt source. If a packet is longer than the 64-byte
-FIFO, the CC1101 de-asserts this signal on overflow; the loop then reports the
-overflow status separately.
-
-The `INVALID_PACKET` diagnostic includes `PKTSTATUS.SFD`, RSSI and up to
-48 FIFO bytes captured before the receiver is flushed. `SFD=1` means the
-radio still considers the packet active; `SFD=0` means the sync/end-of-packet
-signal is no longer active. In the previous logs, `SFD=1` together with
-`MARCSTATE=0x0D` demonstrated that the code was reading an in-progress frame
-at the FIFO threshold. The new end-of-packet interrupt is intended to avoid
-that premature read. This source change has not yet been compiled or tested on
-the target hardware.
-
-| Log tag | Meaning |
-|---|---|
-| `FLOWIS_DIAG FIFO_OVERFLOW` | RXBYTES reports the CC1101 RX FIFO overflow status bit. |
-| `FLOWIS_DIAG FIFO_EMPTY` | GDO0 was high but RXBYTES reported zero bytes and no overflow bit. |
-| `FLOWIS_DIAG INVALID_PACKET` | The received variable-length prefix or FIFO byte count failed the driver's length validation. |
-| `FLOWIS_DIAG CRC_REJECT` | The driver read a structurally accepted packet, but the CC1101 CRC status bit was not set while CRC was enabled. |
-| `FLOWIS_DIAG PACKET_ACCEPT` | The packet passed the component's current CRC acceptance rule and is passed to the existing callback. |
-
-The diagnostic messages include raw RXBYTES and, where relevant, the MARCSTATE. The current code intentionally preserves ESPHome's original RX/IDLE/FIFO-flush state transitions. It separates the different reasons that the original generic warning conflated; it does not yet redesign packet acquisition.
-
-## If no packet appears
-
-No `flowis_pkt` line means no packet reached the existing callback. The diagnostic tags above should now indicate whether the driver saw an empty FIFO, a hardware overflow, an invalid length/count, or a CRC rejection.
-
-The controlled no-CRC variant for this same external-component diagnostic build is [`example-flowis-cc1101-packet-mode-diagnostic-no-crc.yaml`](../example-flowis-cc1101-packet-mode-diagnostic-no-crc.yaml). It changes only `crc_enable` to `false`, retains the diagnostic component override, and labels callback packets as `CRC=NOT_CHECKED`. Use it only as a separate experiment after collecting the CRC-enabled logs. Do not treat those packets as valid meter data until their CRC is independently checked. Do not change bitrate, deviation, bandwidth, frequency, and sync settings all at once.
-
-## Important implementation notes
-
-- This is a receiver diagnostic, not a production decoder.
-- The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to packet-mode GDO0 configuration, interrupt edge selection and `CC1101Component::loop()`.
-- The diagnostic build was compiled and installed on the user's ESP32-WROOM-32 with ESPHome 2026.10.2. On 2026-11-11, CRC-valid Type-1 (25-byte) and Type-2 (19-byte) frames were received at 868.00 MHz with RSSI around -65 dBm.
-- The current external `rtl433:` component cannot run at the same time as this native `cc1101:` instance on the same physical module.
-
-
-## Decoding frames and publishing values to Home Assistant
-
-The radio diagnostic is now complemented by a Type-1/Type-2 decoder and ESPHome template
-sensors. See [Flowis decoded values in ESPHome and Home Assistant](flowis-homeassistant.md)
-and the [complete decoded example configuration](../example-flowis-cc1101-homeassistant.yaml).
+Ten przykład jest implementacją społecznościową opartą na przechwyconych ramkach i nie stanowi
+certyfikowanego dekodera producenta licznika.
