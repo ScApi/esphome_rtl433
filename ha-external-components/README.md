@@ -33,6 +33,23 @@ Use ESPHome 2026.10.2, the version against which this override was prepared and 
 The complete example retains the verified 868.00 MHz tuning from the current installation,
 hardware CRC checking and the Flowis packet decoder.
 
+## Tested ESP32-WROOM-32 wiring
+
+| CC1101 signal | ESP32 GPIO |
+|---|---:|
+| CSN | GPIO5 |
+| GDO0 | GPIO4 |
+| SCK | GPIO18 |
+| MISO | GPIO19 |
+| MOSI | GPIO23 |
+| GDO2 | Not connected / not used |
+| VCC / GND | 3.3 V / GND |
+
+The example uses `spi.clk_pin: GPIO18`, `spi.miso_pin: GPIO19`,
+`spi.mosi_pin: GPIO23`, `cc1101.cs_pin: GPIO5` and
+`cc1101.gdo0_pin: GPIO4`. Do not copy the generic legacy `rtl433:` wiring
+(GDO0 GPIO13 / GDO2 GPIO4) into this native packet-mode configuration.
+
 **Do not load** the separate `rtl433:` / rtl_433_ESP component at the same time. Both drivers
 would attempt to control the same physical CC1101 over SPI. This packet-mode override is the
 only CC1101 driver in this configuration.
