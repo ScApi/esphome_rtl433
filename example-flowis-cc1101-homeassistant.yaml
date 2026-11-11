@@ -55,6 +55,7 @@ spi:
   mosi_pin: GPIO23
 
 cc1101:
+  id: flowis_radio
   cs_pin: GPIO5
   gdo0_pin: GPIO4
 
