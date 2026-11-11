@@ -225,12 +225,11 @@ sensor:
     accuracy_decimals: 3
     update_interval: never
 
-  # Slot 0 rolls over at the start of a new calendar month, so it is total_increasing.
+  # Current-month consumption resets at calendar-month rollover; do not mark it total_increasing.
   - platform: template
     name: "Flowis zużycie bieżący miesiąc"
     id: flowis_month_0_m3
     device_class: water
-    state_class: total_increasing
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
