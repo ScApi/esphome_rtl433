@@ -1,6 +1,8 @@
-# ESPHome rtl_433 CC1101 Component
+# FlowisPlus-ESPHome
 
-An [ESPHome](https://esphome.io/) external component that turns an ESP32 + CC1101 RF transceiver into a configurable sub-GHz sensor gateway (for example 433 MHz or 868 MHz). Decoded messages from weather stations, door/window sensors, tire-pressure monitors, and hundreds of other devices are delivered through ESPHome's native automation system -- no MQTT broker required.
+ESPHome integration for **Flowis+ ECO water meters** using an ESP32 and CC1101 RF transceiver. The maintained configuration receives native CC1101 hardware packets, validates the radio CRC, decodes Flowis Type-1 and Type-2 frames, and publishes meter readings to Home Assistant through ESPHome sensors.
+
+The repository also retains a separate generic `rtl433:` external component for other sub-GHz devices (such as 433 MHz and 868 MHz sensors). This legacy receive path is independent of the Flowis+ packet-mode configuration; do not enable both drivers on the same CC1101.
 
 
 Under the hood the component wraps [rtl_433_ESP](https://github.com/NorthernMan54/rtl_433_ESP), which is a port of the widely-used [rtl_433](https://github.com/merbanan/rtl_433) project.
@@ -84,14 +86,14 @@ radio over SPI.
 ## Installation
 
 Add the legacy `rtl433:` component as an external source in your ESPHome YAML. The repository's
-maintained Flowis working branch is used in this example:
+maintained `main` branch is used in this example:
 
 ```yaml
 external_components:
   - source:
       type: git
-      url: https://github.com/ScApi/esphome_rtl433
-      ref: experiment/flowis-cc1101-packet-diagnostics
+      url: https://github.com/ScApi/FlowisPlus-ESPHome
+      ref: main
     components: [rtl433]
 ```
 
