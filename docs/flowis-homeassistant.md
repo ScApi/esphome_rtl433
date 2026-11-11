@@ -17,11 +17,9 @@ The captured Type-1 frame in the current test contains the ID bytes:
 
 The Flowis protocol stores the ID little-endian, so this decodes to **241047300**.
 
-The earlier Home Assistant source entity mentioned in the configuration was
-`sensor.flowis_241047064_water_usage`. That contains a different ID (**241047064**).
-Do not assume these identify the same meter. Check the serial printed on the physical meter
-or compare it with a known-good reading before using the new source for billing or long-term
-statistics.
+The earlier Home Assistant source entity `sensor.flowis_241047064_water_usage` used an
+incorrect meter ID and should be ignored. The current captured frames decode consistently
+to **241047300**, and the example filters for that ID.
 
 The example filters for meter ID `241047300`. In the `on_packet` lambda, change:
 
@@ -133,10 +131,16 @@ The captured sample frames decode as follows:
 - Type-1 previous-month-end total: **36.841 m³**
 - Current-month difference from Type 1: **3.218 m³**
 - Type-2 current month: **3.218 m³**
-- Type-2 previous six months: **11.230, 10.131, 10.617, 4.612, 0.256 m³**, then one `0xFFFF` special/invalid value (not published).
+- Type-2 previous six months: **11.230, 10.131, 10.617, 4.612, 0.001 m³**, then one `0xFFFF` special/invalid value (not published).
 
 The Type-1 and Type-2 current-month values agree:
 `40.059 - 36.841 = 3.218 m³`.
+
+The 36.841 m³ Type-1 value is a cumulative meter reading at the end of the previous month,
+not the amount of water used during that month. Type-2 reports the monthly consumption
+history separately; in this captured frame, the previous calendar month slot is 11.230 m³.
+If a bill says 36 m³ of *consumption* rather than a cumulative meter reading, compare its
+billing period and start/end readings before treating that value as the same measurement.
 
 This confirms the byte offsets for the sample frame. It does not establish the meaning of the
 raw alarm/backflow bytes, so they are intentionally exposed as raw numeric values.
@@ -151,4 +155,5 @@ After the ESPHome node reconnects, confirm that:
    or no valid packet arrives.
 4. The ESPHome log contains `FLOWIS_DIAG PACKET_ACCEPT` and `flowis_decode TYPE1/TYPE2`.
 
-Do not use the example values as a permanent meter baseline until the meter ID is confirmed.
+The previous entity ID `241047064` was identified as incorrect configuration and is not used
+by this example. The example currently filters the received meter ID `241047300`.
