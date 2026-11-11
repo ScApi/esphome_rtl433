@@ -5,9 +5,9 @@
 # Keep your existing wifi, api, ota, esp32 and SPI pin configuration.
 # Do NOT add rtl433: / rtl_433_ESP; this configuration owns the CC1101 through cc1101:.
 #
-# IMPORTANT: Current captured frames decode to meter ID 241047300.
-# Your previous Home Assistant source entity contained 241047064.
-# Confirm which number belongs to the physical meter before relying on these readings.
+# Current captured frames decode to meter ID 241047300.
+# The old Home Assistant source entity ID 241047064 came from an incorrect configuration
+# and is intentionally not used here.
 #
 # The packet callback accepts only frames that pass the CC1101 hardware CRC check.
 
