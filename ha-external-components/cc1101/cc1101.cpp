@@ -368,9 +368,13 @@ void CC1101Component::power_down() {
     return;
   }
 
-  // CC1101 must be in IDLE before the PWD strobe. The SPI transaction's
-  // CSn rising edge after PWD completes entry into the hardware SLEEP state.
+  // CC1101 must be in IDLE before the PWD strobe. Put the GDO pins into
+  // the hardware-low configuration recommended by the datasheet for minimum
+  // SLEEP current, then issue PWD. CSn rising after the strobe enters SLEEP.
   this->enter_idle_();
+  this->write_(Register::IOCFG0, 0x2F);
+  this->write_(Register::IOCFG1, 0x2F);
+  this->write_(Register::IOCFG2, 0x2F);
   this->strobe_(Command::PWD);
   ESP_LOGI(TAG, "CC1101 entered hardware power-down state");
 }
