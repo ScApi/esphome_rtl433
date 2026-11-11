@@ -1,5 +1,4 @@
-# FlowisPlus-ESPHome
-
+# ESPHome CC1101 Components — Flowis+ ECO and rtl_433
 ESPHome integration for **Flowis+ ECO water meters** using an ESP32 and CC1101 RF transceiver. The maintained configuration receives native CC1101 hardware packets, validates the radio CRC, decodes Flowis Type-1 and Type-2 frames, and publishes meter readings to Home Assistant through ESPHome sensors.
 
 The repository also retains a separate generic `rtl433:` external component for other sub-GHz devices (such as 433 MHz and 868 MHz sensors). This legacy receive path is independent of the Flowis+ packet-mode configuration; do not enable both drivers on the same CC1101.
@@ -92,7 +91,7 @@ maintained `main` branch is used in this example:
 external_components:
   - source:
       type: git
-      url: https://github.com/ScApi/FlowisPlus-ESPHome
+      url: https://github.com/ScApi/esphome_rtl433
       ref: main
     components: [rtl433]
 ```
