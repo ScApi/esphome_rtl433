@@ -206,7 +206,9 @@ Zużycie miesięczne w kolejności od bieżącego miesiąca:
 i nie jest publikowana.
 
 Wartości bieżącego miesiąca z obu ramek są zgodne:
-40.059 m³ - 36.841 m³ = 3.218 m³.
+40.059 m³ - 36.841 m³ = 3.218 m³. W ESPHome są publikowane osobno:
+sensor Flowis zużycie bieżący miesiąc (Type-2) oraz sensor Flowis bieżący miesiąc kontrola
+(obliczony z Type-1). Pozostawienie dwóch encji ułatwia wykrycie rozbieżności w przyszłych odczytach.
 
 **Uwaga przy porównaniu z rachunkiem:** 36.841 m³ z Type-1 to stan skumulowany licznika
 na koniec poprzedniego miesiąca, a nie zużycie w tym miesiącu. Type-2 podaje zużycie za
@@ -219,9 +221,10 @@ za zgodne. Trzeba porównać okres rozliczeniowy, numer licznika i wskazania z r
 Pełny YAML tworzy sensory:
 
 - stan całkowity w m³ z klasą total_increasing;
-- stan całkowity na koniec poprzedniego miesiąca;
-- bieżący miesiąc i sześć poprzednich wartości miesięcznych;
-- RSSI i przesunięcie częstotliwości;
+- skumulowany stan na koniec poprzedniego miesiąca;
+- bieżący miesiąc z Type-2 oraz osobny sensor kontrolny wyliczony z Type-1;
+- sześć wcześniejszych wartości miesięcznych z Type-2;
+- RSSI, LQI i przesunięcie częstotliwości;
 - surowe bajty alarmu i backflow;
 - numer i czas zapisany w liczniku.
 
