@@ -32,6 +32,7 @@ class CC1101Component final : public Component,
   void begin_rx();
   void reset();
   void set_idle();
+  void power_down();  // Enter CC1101 hardware power-down; intended immediately before MCU deep sleep.
 
   // GDO Pin Configuration
   void set_gdo0_pin(InternalGPIOPin *pin) { this->gdo0_pin_ = pin; }
