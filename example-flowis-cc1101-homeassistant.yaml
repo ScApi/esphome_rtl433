@@ -66,9 +66,13 @@ cc1101:
 
   on_packet:
     - lambda: |-
-        // CRC is enabled in CC1101: this callback is reached only for CRC-valid packets.
         // The CC1101 component removes the variable-length prefix and CRC bytes.
-        if (x.size() < 5) {
+        // With crc_enable: true, this callback receives only hardware CRC-accepted packets.
+        if (!((x.size() == 25 && x[0] == 0x01) ||
+              (x.size() == 19 && x[0] == 0x02))) {
+          ESP_LOGW("flowis_decode", "Unexpected Flowis frame: type=0x%02X len=%u",
+                   x.empty() ? 0 : static_cast<unsigned>(x[0]),
+                   static_cast<unsigned>(x.size()));
           return;
         }
 
@@ -94,16 +98,11 @@ cc1101:
                  static_cast<unsigned long>(meter_id));
         id(flowis_meter_number).publish_state(meter_id_text);
         id(flowis_rssi).publish_state(rssi);
+        id(flowis_lqi).publish_state(static_cast<float>(lqi));
         id(flowis_frequency_offset).publish_state(freq_offset);
 
         if (x[0] == 0x01) {
           // Type 1: current total, device timestamp, status bytes and previous-month-end total.
-          if (x.size() != 25) {
-            ESP_LOGW("flowis_decode", "Type 1 has unexpected payload length: %u",
-                     static_cast<unsigned>(x.size()));
-            return;
-          }
-
           const uint32_t total_litres =
               static_cast<uint32_t>(x[10]) |
               (static_cast<uint32_t>(x[11]) << 8) |
@@ -120,14 +119,17 @@ cc1101:
             id(flowis_total_m3).publish_state(total_litres / 1000.0f);
           }
 
-          if (previous_month_end_litres <= total_litres) {
+          if (previous_month_end_litres > 0) {
             id(flowis_previous_month_end_m3).publish_state(
               previous_month_end_litres / 1000.0f
             );
+          }
 
-            // Type 1 independently provides current-month usage:
-            // current lifetime total minus previous month-end total.
-            id(flowis_month_0_m3).publish_state(
+          if (previous_month_end_litres > 0 &&
+              total_litres >= previous_month_end_litres) {
+            // Independent cross-check: Type-1 lifetime total minus previous-month-end total.
+            // Kept separate from Type-2 monthly usage so both values can be compared in HA.
+            id(flowis_month_current_check_m3).publish_state(
               (total_litres - previous_month_end_litres) / 1000.0f
             );
           }
@@ -166,12 +168,6 @@ cc1101:
         } else if (x[0] == 0x02) {
           // Type 2: seven little-endian uint16 monthly values in litres.
           // Slot 0 = current month; slots 1..6 = previous six months.
-          if (x.size() != 19) {
-            ESP_LOGW("flowis_decode", "Type 2 has unexpected payload length: %u",
-                     static_cast<unsigned>(x.size()));
-            return;
-          }
-
           for (size_t i = 0; i < 7; i++) {
             const uint16_t litres =
                 static_cast<uint16_t>(x[5 + i * 2]) |
@@ -221,6 +217,16 @@ sensor:
     id: flowis_previous_month_end_m3
     device_class: water
     state_class: total_increasing
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    update_interval: never
+
+  # Cross-check from Type 1: total register minus previous-month-end total.
+  # Keep separate from Type 2 month[0] so both reports can be compared.
+  - platform: template
+    name: "Flowis bieżący miesiąc kontrola"
+    id: flowis_month_current_check_m3
+    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -288,6 +294,12 @@ sensor:
     id: flowis_rssi
     unit_of_measurement: "dBm"
     accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "Flowis LQI"
+    id: flowis_lqi
+    accuracy_decimals: 0
     update_interval: never
 
   - platform: template
