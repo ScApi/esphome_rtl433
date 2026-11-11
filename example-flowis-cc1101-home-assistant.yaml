@@ -63,8 +63,6 @@ sensor:
   - platform: template
     id: flowis_previous_month_end_total_m3
     name: "Flowis stan na koniec poprzedniego miesiaca"
-    device_class: water
-    state_class: measurement
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -75,7 +73,7 @@ sensor:
     id: flowis_month_current_check_m3
     name: "Flowis biezacy miesiac kontrola"
     device_class: water
-    state_class: measurement
+    state_class: total_increasing
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -85,7 +83,7 @@ sensor:
     id: flowis_month_0_m3
     name: "Flowis zuzycie biezacy miesiac"
     device_class: water
-    state_class: measurement
+    state_class: total_increasing
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -93,8 +91,6 @@ sensor:
   - platform: template
     id: flowis_month_1_m3
     name: "Flowis zuzycie poprzedni miesiac"
-    device_class: water
-    state_class: measurement
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -102,8 +98,6 @@ sensor:
   - platform: template
     id: flowis_month_2_m3
     name: "Flowis zuzycie 2 miesiace temu"
-    device_class: water
-    state_class: measurement
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -111,8 +105,6 @@ sensor:
   - platform: template
     id: flowis_month_3_m3
     name: "Flowis zuzycie 3 miesiace temu"
-    device_class: water
-    state_class: measurement
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -120,8 +112,6 @@ sensor:
   - platform: template
     id: flowis_month_4_m3
     name: "Flowis zuzycie 4 miesiace temu"
-    device_class: water
-    state_class: measurement
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -129,8 +119,6 @@ sensor:
   - platform: template
     id: flowis_month_5_m3
     name: "Flowis zuzycie 5 miesiecy temu"
-    device_class: water
-    state_class: measurement
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -138,8 +126,6 @@ sensor:
   - platform: template
     id: flowis_month_6_m3
     name: "Flowis zuzycie 6 miesiecy temu"
-    device_class: water
-    state_class: measurement
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
