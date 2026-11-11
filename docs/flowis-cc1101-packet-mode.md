@@ -23,7 +23,8 @@ mają status opisanych testów społeczności.
 | v24.8.00, 03/2022 | 2404… | Użytkownik zgłosił poprawne dekodowanie przez starszy wbudowany dekoder Flowis w rtl_433. | Klasyczny dekoder rtl_433 / rtl_433_ESP dla zgodnych ramek. |
 | v24.C.06, 02/2023 | 2405… | Zgłoszono brak dekodowania przez ówczesny dekoder rtl_433. Przyczyna nie została rozstrzygnięta. | Brak potwierdzonej zgodności w tej konfiguracji. |
 | v24.9.00, 06/2023 | 2406… | Zgłoszono brak dekodowania przez ówczesny dekoder rtl_433. Nie dowodzi to szyfrowania. | Brak potwierdzonej zgodności w tej konfiguracji. |
-| **v24.C.11, 1/2026** | **2409xxxxx** | Autor wątku potwierdził odbiór niezaszyfrowanych ramek. Ten sam PHY, sync word i CRC; Type-1 ma 25 bajtów, Type-2 19 bajtów. | **Potwierdzona ścieżka: ESPHome 2026.10.2 + natywny CC1101 packet mode + dekoder z przykładu w tym repozytorium.** |
+| **v24.C.11, 1/2026** | **2409xxxxx** | Autor wątku potwierdził odbiór niezaszyfrowanych ramek. Ten sam PHY, sync word i CRC; Type-1 ma 25 bajtów, Type-2 19 bajtów. |
+| **v24.C.11, 6/2026** | **2410xxxxx** | Ten sam PHY, sync word i CRC; Type-1 ma 25 bajtów, Type-2 19 bajtów. |
 
 Wpis 1/2026 oznacza datę widoczną na etykiecie modułu radiowego; v24.C.11 to jego oznaczenie wersji.
 Nie oznacza to, że każdy licznik wyprodukowany od stycznia 2026 r. został przetestowany.
@@ -214,7 +215,7 @@ Wartości bieżącego miesiąca z obu ramek są zgodne:
 sensor Flowis zużycie bieżący miesiąc (Type-2) oraz sensor Flowis bieżący miesiąc kontrola
 (obliczony z Type-1). Pozostawienie dwóch encji ułatwia wykrycie rozbieżności w przyszłych odczytach.
 
-**Uwaga przy porównaniu z rachunkiem:** 36.841 m³ z Type-1 to stan skumulowany licznika
+36.841 m³ z Type-1 to stan skumulowany licznika
 na koniec poprzedniego miesiąca, a nie zużycie w tym miesiącu. Type-2 podaje zużycie za
 poprzedni miesiąc jako osobną wartość — w pokazanej ramce jest to 11.230 m³. Jeśli rachunek
 za miesiąc wskazuje 36 m³ zużycia, a nie stan licznika, tych wartości nie należy uznawać
