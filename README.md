@@ -25,34 +25,79 @@ Under the hood the component wraps [rtl_433_ESP](https://github.com/NorthernMan5
 
 ## Wiring
 
-Connect the CC1101 module to the ESP32. The table below shows the default VSPI wiring that matches the example configuration.
+There are two different ESPHome receive paths in this repository. Do not mix their pin assignments:
+
+- The legacy `rtl433:` component uses asynchronous pulse capture and its generic example pinout below.
+- The Flowis+ ECO example uses ESPHome's native `cc1101:` hardware packet mode and the tested ESP32-WROOM-32 pinout in the second table.
+
+### Generic `rtl433:` component example
 
 | CC1101 Pin | ESP32 GPIO | Config Key | Required |
 |------------|------------|------------|----------|
-| VCC        | 3.3 V      | --         | Yes      |
-| GND        | GND        | --         | Yes      |
-| CSN        | GPIO 5     | `cs_pin`   | Yes      |
-| GDO0       | GPIO 13    | `gdo0_pin` | Yes      |
-| GDO2       | GPIO 4     | `gdo2_pin` | No       |
-| SCK        | GPIO 18    | `clk_pin`  | No (VSPI default) |
-| MOSI       | GPIO 23    | `mosi_pin` | No (VSPI default) |
-| MISO       | GPIO 19    | `miso_pin` | No (VSPI default) |
+| VCC | 3.3 V | -- | Yes |
+| GND | GND | -- | Yes |
+| CSN | GPIO5 | `cs_pin` | Yes |
+| GDO0 | GPIO13 | `gdo0_pin` | Yes |
+| GDO2 | GPIO4 | `gdo2_pin` | No |
+| SCK | GPIO18 | `clk_pin` | No (VSPI default) |
+| MOSI | GPIO23 | `mosi_pin` | No (VSPI default) |
+| MISO | GPIO19 | `miso_pin` | No (VSPI default) |
 
-If you omit `clk_pin`, `miso_pin`, and `mosi_pin`, the component uses the ESP32 hardware VSPI defaults. Supply all three to use a custom SPI bus.
+This is the generic wiring for examples that use the repository's `rtl433:` component. Its
+GDO0/GDO2 assignments are not the pinout used by the Flowis packet-mode example below.
 
-> **Note:** `gdo2_pin` is optional. The CC1101 receiver path uses only GDO0 for interrupt-driven data capture; GDO2 is not read at runtime. If omitted, `RADIOLIB_NC` (not connected) is passed to RadioLib and GDO2 functionality is silently disabled. You only need to set it if your hardware or a future library feature requires GDO2.
+### Flowis+ ECO native CC1101 packet-mode wiring — tested
+
+The successful ESP32-WROOM-32 + CC1101 setup used for the Flowis Type-1/Type-2 reception is:
+
+| CC1101 Pin | ESP32-WROOM-32 | YAML setting |
+|------------|----------------|--------------|
+| CSN | **GPIO5** | `cs_pin: GPIO5` |
+| GDO0 | **GPIO4** | `gdo0_pin: GPIO4` |
+| SCK | **GPIO18** | `clk_pin: GPIO18` |
+| MISO | **GPIO19** | `miso_pin: GPIO19` |
+| MOSI | **GPIO23** | `mosi_pin: GPIO23` |
+| GDO2 | Not connected / unused | Do not add `gdo2_pin` |
+| VCC | 3.3 V | -- |
+| GND | GND | -- |
+
+For this native packet-mode path, the YAML uses:
+
+```yaml
+spi:
+  clk_pin: GPIO18
+  miso_pin: GPIO19
+  mosi_pin: GPIO23
+
+cc1101:
+  cs_pin: GPIO5
+  gdo0_pin: GPIO4
+```
+
+The native packet-mode example does not use GDO2. Do not change GDO0 to GPIO13 or connect GDO2 to GPIO4
+when following the Flowis-specific wiring above.
+
+If you omit `clk_pin`, `miso_pin`, and `mosi_pin`, ESPHome uses the ESP32 hardware VSPI defaults.
+Both receive paths must not be enabled at the same time on one CC1101: only one driver can own the
+radio over SPI.
 
 ## Installation
 
-Add the component as an external source in your ESPHome YAML. Point it at this repository (or a local checkout):
+Add the legacy `rtl433:` component as an external source in your ESPHome YAML. The repository's
+maintained Flowis working branch is used in this example:
 
 ```yaml
 external_components:
   - source:
       type: git
-      url: https://github.com/<your-org>/esphome_rtl433.git
+      url: https://github.com/ScApi/esphome_rtl433
+      ref: experiment/flowis-cc1101-packet-diagnostics
     components: [rtl433]
 ```
+
+This is the legacy pulse-capture path. For Flowis+ ECO packet mode, use the dedicated
+`external_components:` source with `path: ha-external-components` shown in the Flowis section below.
+Do not load both components for the same physical CC1101.
 
 For a local checkout:
 
@@ -393,6 +438,57 @@ statement for every unit. Check the compatibility table in the guide.
 This packet-mode path uses ESPHome's built-in `cc1101:` component with the override from
 `ha-external-components`. **Do not enable `rtl433:` or rtl_433_ESP on the same CC1101 at the
 same time.**
+
+### Example readings from the real receiver logs (2026-11-11)
+
+The following values are from the ESP32-WROOM-32 + CC1101 receiver after changing the tuning
+from 868.04 MHz to **868.00 MHz**. Both packet types passed the CC1101 hardware CRC check.
+
+```text
+09:16:00 FLOWIS_DIAG PACKET_ACCEPT len=19 crc_en=1 crc_ok=1 rssi=-65.0 lqi=95 freq_offset=80933
+09:16:00 RX type=type-2 len=19 DATA=[
+  02 04 17 5E 0E 92 0C DE 2B 93 27 79 29 04 12 01 00 FF FF
+]
+
+09:16:28 FLOWIS_DIAG PACKET_ACCEPT len=25 crc_en=1 crc_ok=1 rssi=-64.5 lqi=91 freq_offset=80933
+09:16:28 RX type=type-1 len=25 DATA=[
+  01 04 17 5E 0E C1 98 93 D6 6A 7B 9C 00 00 01 00 00 A5 0B 00 80 E9 8F 00 00
+]
+```
+
+Decoded values:
+
+| Field | Result | Interpretation |
+|---|---:|---|
+| Meter ID | `241047300` | Bytes `04 17 5E 0E`, uint32 little-endian |
+| Type-1 device time | `2026-11-11 09:14:24` | Packed timestamp from the meter |
+| Type-1 total register | **40.059 m³** | 24-bit little-endian litres, divided by 1000 |
+| Type-1 previous-month-end register | **36.841 m³** | 32-bit little-endian litres, divided by 1000 |
+| Type-1 monthly difference | **3.218 m³** | 40.059 − 36.841 m³ |
+| Type-2 current month | **3.218 m³** | First of seven uint16 little-endian monthly values |
+| Type-2 previous month | **11.230 m³** | Second monthly value |
+| Type-2 two months ago | **10.131 m³** | Third monthly value |
+| Type-2 three months ago | **10.617 m³** | Fourth monthly value |
+| Type-2 four months ago | **4.612 m³** | Fifth monthly value |
+| Type-2 five months ago | **0.001 m³** | Sixth monthly value |
+| Type-2 six months ago | Not published (`0xFFFF`) | Special/invalid marker; not 65.535 m³ |
+| RSSI | **−64.5 to −65.0 dBm** | Strong received signal in this installation |
+| LQI | **91–95** | CC1101 link-quality indication |
+| FREQEST | **+80,933 Hz** | Receiver frequency-offset estimate; not a meter value |
+
+The Type-1 and Type-2 current-month values independently agree:
+
+```text
+40.059 m³ - 36.841 m³ = 3.218 m³
+```
+
+**Do not confuse the two previous-month fields:** 36.841 m³ is a cumulative meter register at the
+end of the previous month. The previous month's consumption in this Type-2 packet is 11.230 m³.
+When comparing against an invoice, check whether the invoice's 36 m³ means a cumulative meter
+reading or actual consumption for the billing period.
+
+The sample confirms the payload layout for this received meter and firmware generation. It does
+not validate the interpretation of the raw alarm/backflow status bytes or the `0xFFFF` slot.
 
 ### Legacy rtl_433 Flowis decoder diagnostics
 
