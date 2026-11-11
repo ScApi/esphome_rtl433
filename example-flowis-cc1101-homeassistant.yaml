@@ -236,7 +236,6 @@ sensor:
   - platform: template
     name: "Flowis bieżący miesiąc kontrola"
     id: flowis_month_current_check_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -245,7 +244,6 @@ sensor:
   - platform: template
     name: "Flowis zużycie bieżący miesiąc"
     id: flowis_month_0_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -254,7 +252,6 @@ sensor:
   - platform: template
     name: "Flowis zużycie miesiąc -1"
     id: flowis_month_1_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -262,7 +259,6 @@ sensor:
   - platform: template
     name: "Flowis zużycie miesiąc -2"
     id: flowis_month_2_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -270,7 +266,6 @@ sensor:
   - platform: template
     name: "Flowis zużycie miesiąc -3"
     id: flowis_month_3_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -278,7 +273,6 @@ sensor:
   - platform: template
     name: "Flowis zużycie miesiąc -4"
     id: flowis_month_4_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -286,7 +280,6 @@ sensor:
   - platform: template
     name: "Flowis zużycie miesiąc -5"
     id: flowis_month_5_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
@@ -294,7 +287,6 @@ sensor:
   - platform: template
     name: "Flowis zużycie miesiąc -6"
     id: flowis_month_6_m3
-    device_class: water
     unit_of_measurement: "m³"
     accuracy_decimals: 3
     update_interval: never
