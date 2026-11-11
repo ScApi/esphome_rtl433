@@ -112,5 +112,12 @@ The controlled no-CRC variant for this same external-component diagnostic build 
 
 - This is a receiver diagnostic, not a production decoder.
 - The upstream CC1101 component sources are pinned to ESPHome 2026.10.2; the diagnostic modifications are limited to packet-mode GDO0 configuration, interrupt edge selection and `CC1101Component::loop()`.
-- The code has been placed in the GitHub branch, but the latest 56-byte threshold adjustment has **not yet been compiled in your Home Assistant ESPHome environment or tested on the ESP32/CC1101 hardware**.
+- The diagnostic build was compiled and installed on the user's ESP32-WROOM-32 with ESPHome 2026.10.2. On 2026-11-11, CRC-valid Type-1 (25-byte) and Type-2 (19-byte) frames were received at 868.00 MHz with RSSI around -65 dBm.
 - The current external `rtl433:` component cannot run at the same time as this native `cc1101:` instance on the same physical module.
+
+
+## Decoding frames and publishing values to Home Assistant
+
+The radio diagnostic is now complemented by a Type-1/Type-2 decoder and ESPHome template
+sensors. See [Flowis decoded values in ESPHome and Home Assistant](flowis-homeassistant.md)
+and the [complete decoded example configuration](../example-flowis-cc1101-homeassistant.yaml).
