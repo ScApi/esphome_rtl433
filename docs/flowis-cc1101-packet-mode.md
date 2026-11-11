@@ -75,8 +75,8 @@ W pliku urządzenia użyj źródła komponentu z tej gałęzi:
 external_components:
   - source:
       type: git
-      url: https://github.com/ScApi/esphome_rtl433
-      ref: experiment/flowis-cc1101-packet-diagnostics
+      url: https://github.com/ScApi/FlowisPlus-ESPHome
+      ref: main
       path: ha-external-components
     components: [cc1101]
     refresh: 0s
