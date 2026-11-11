@@ -439,6 +439,25 @@ This packet-mode path uses ESPHome's built-in `cc1101:` component with the overr
 `ha-external-components`. **Do not enable `rtl433:` or rtl_433_ESP on the same CC1101 at the
 same time.**
 
+### Select the meter ID
+
+The maintained [ESPHome Flowis example](example-flowis-cc1101-homeassistant.yaml) filters
+received packets to one meter so that nearby Flowis devices are not mixed together.
+
+Open the example and find `cc1101:` → `on_packet:` → `lambda:`. Change only this constant
+to the serial/ID decoded from your own meter's frame:
+
+```cpp
+constexpr uint32_t EXPECTED_METER_ID = 241047300UL;
+```
+
+For another meter, replace `241047300` with its ID and keep the `UL` suffix. The current
+captured ID is `241047300` (wire bytes `04 17 5E 0E`, little-endian). The old
+`241047064` value from the previous Home Assistant source configuration was incorrect and
+is not used by this decoder. Setting the constant to `0UL` disables ID filtering and accepts
+any compatible Flowis meter in radio range; use that only for diagnostics when multiple
+meters may transmit nearby.
+
 ### Example readings from the real receiver logs (2026-11-11)
 
 The following values are from the ESP32-WROOM-32 + CC1101 receiver after changing the tuning
