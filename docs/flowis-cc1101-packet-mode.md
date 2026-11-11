@@ -131,7 +131,9 @@ sterownik rtl433 nie mogą jednocześnie obsługiwać tego samego modułu po SPI
 Jeżeli licznik nie nadaje poza godzinami 08:00–17:00 w dni robocze, można usypiać zarówno
 ESP32, jak i sam układ CC1101. Samo `deep_sleep` ESP32 nie wyłącza zasilania zewnętrznego
 modułu radiowego, dlatego przed uśpieniem mikrokontrolera należy wykonać akcję
-`cc1101.power_down`. Ta akcja przechodzi przez stan IDLE i wysyła do CC1101 komendę PWD.
+`cc1101.power_down`. Ta akcja przechodzi przez stan IDLE, ustawia wyjścia GDO w stan
+sprzętowo niski i wysyła do CC1101 komendę PWD. Po kolejnym uruchomieniu ESP32 komponent
+ponownie inicjalizuje radio.
 
 W konfiguracji radia dodaj jawne ID:
 
@@ -141,63 +143,74 @@ cc1101:
   # pozostałe ustawienia CC1101 bez zmian
 ```
 
-Dodaj jeden komponent `deep_sleep:` oraz źródło czasu SNTP. Jeżeli konfiguracja ma już
-sekcję `time:`, scal wpis `on_time` z istniejącą sekcją — nie twórz drugiej:
+Dodaj jeden komponent `deep_sleep:`, skrypt kontroli harmonogramu i źródło czasu SNTP.
+Jeżeli konfiguracja ma już sekcję `time:` lub `script:`, scal z nią odpowiednie wpisy —
+nie twórz drugiej sekcji o tej samej nazwie:
 
 ```yaml
 deep_sleep:
   id: flowis_deep_sleep
 
+script:
+  - id: flowis_check_schedule
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: |-
+              const auto now = id(sntp_time).now();
+              // Bez poprawnego czasu nie usypiaj odbiornika — bezpieczniej
+              // pozostać w nasłuchu niż przypadkowo ominąć transmisję.
+              if (!now.is_valid()) {
+                return false;
+              }
+
+              // ESPHome: niedziela=1, poniedziałek=2, ..., sobota=7.
+              const bool weekend = now.day_of_week == 1 || now.day_of_week == 7;
+              const bool outside_work_hours = now.hour < 8 || now.hour >= 17;
+              return weekend || outside_work_hours;
+          then:
+            - cc1101.power_down:
+                id: flowis_radio
+            - delay: 100ms
+            - deep_sleep.enter:
+                id: flowis_deep_sleep
+                until: "08:00:00"
+                time_id: sntp_time
+
 time:
   - platform: sntp
     id: sntp_time
     timezone: Europe/Warsaw
+    # Po synchronizacji sprawdź harmonogram od razu, również po resecie urządzenia.
+    on_time_sync:
+      then:
+        - script.execute: flowis_check_schedule
+    # Dodatkowe sprawdzenie co minutę wykrywa wejście w godziny uśpienia.
     on_time:
-      # Sprawdzaj harmonogram raz na minutę, także po nieplanowanym restarcie.
       - seconds: 5
         minutes: /1
         then:
-          - if:
-              condition:
-                lambda: |-
-                  const auto now = id(sntp_time).now();
-                  // Bez poprawnego czasu nie usypiaj odbiornika — bezpieczniej
-                  // pozostać w nasłuchu niż przypadkowo ominąć transmisję.
-                  if (!now.is_valid()) {
-                    return false;
-                  }
-
-                  // ESPHome: niedziela=1, poniedziałek=2, ..., sobota=7.
-                  const bool weekend = now.day_of_week == 1 || now.day_of_week == 7;
-                  const bool outside_work_hours = now.hour < 8 || now.hour >= 17;
-                  return weekend || outside_work_hours;
-              then:
-                - cc1101.power_down:
-                    id: flowis_radio
-                - delay: 100ms
-                - deep_sleep.enter:
-                    id: flowis_deep_sleep
-                    until: "08:00:00"
-                    time_id: sntp_time
+          - script.execute: flowis_check_schedule
 ```
 
 Zachowanie harmonogramu:
 - Poniedziałek–piątek po 17:00: uśpienie do następnej lokalnej godziny 08:00.
-- Sobota i niedziela: po krótkim wybudzeniu o 08:00 urządzenie ponownie usypia radio i ESP32
-  do 08:00 następnego dnia. W poniedziałek o 08:00 pozostaje już aktywne.
-- Sprawdzenie co minutę powoduje, że po ręcznym restarcie poza godzinami pracy urządzenie
-  również wróci do uśpienia, najpóźniej po kolejnym sprawdzeniu.
+- Sobota i niedziela: po krótkim wybudzeniu o 08:00 urządzenie synchronizuje czas i ponownie
+  usypia radio oraz ESP32 do 08:00 następnego dnia. W poniedziałek o 08:00 pozostaje aktywne.
+- `on_time_sync` sprawia, że po restarcie poza godzinami pracy urządzenie wróci do uśpienia
+  zaraz po uzyskaniu czasu z SNTP. Kontrola co minutę jest zabezpieczeniem dodatkowym.
 - `until: "08:00:00"` korzysta z lokalnego czasu Europe/Warsaw, więc harmonogram nie opiera
   się na stałych 15/63 godzinach i dostosowuje się do zmiany czasu letniego/zimowego.
 - Podczas uśpienia ESPHome API i OTA są niedostępne. Aktualizacje należy wykonywać w godzinach
   pracy albo tymczasowo wyłączyć harmonogram i ponownie wgrać firmware.
 - Gdy czas SNTP jest nieprawidłowy, układ pozostaje włączony — to celowe zabezpieczenie przed
-  przegapieniem ramek. Po wybudzeniu w weekend urządzenie może być przez krótki czas widoczne
-  jako niedostępne w Home Assistant.
+  przegapieniem ramek.
 
-CC1101 w sprzętowym stanie SLEEP pobiera typowo około 0,2 µA według tabeli parametrów TI.
-To wartość samego układu, nie całej płytki ESP32; rzeczywisty pobór zależy m.in. od stabilizatora,
-konwertera USB-UART i diody zasilania na module. Źródło: [datasheet CC1101, TI](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
+CC1101 w sprzętowym stanie SLEEP pobiera typowo około 0,2 µA przy wyjściach GDO skonfigurowanych
+w stan sprzętowo niski. To wartość samego układu, nie całej płytki ESP32; rzeczywisty pobór zależy
+m.in. od stabilizatora, konwertera USB-UART i diody zasilania na module. Źródło:
+[datasheet CC1101, TI](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
 
 ## 3. Co zmienić, aby dekodować stan licznika
 
